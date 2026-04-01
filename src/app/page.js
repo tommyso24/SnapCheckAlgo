@@ -520,7 +520,7 @@ function QueryPage({ user }) {
                 <span>{dragOver ? '松开即可上传' : '拖拽到此区域或点击上传名片/图片（最多4张，JPG、PNG）'}</span>
               </div>
             </div>
-          </FormItem>
+          </div>
         </div>
 
         {error && (
@@ -806,12 +806,12 @@ function SettingsPage({ user }) {
                 </svg>
               </button>
             </div>
-          </FormItem>
+          </div>
 
           <FormItem label="Model Name">
             <input value={form.modelName || ''} onChange={e => setForm({ ...form, modelName: e.target.value })}
               placeholder="gpt-4o / gemini-2.0-flash" style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5 }} />
-          </FormItem>
+          </div>
 
           <div style={{ background: T.primaryBg, border: `1px solid ${T.primaryBorder}`, borderRadius: T.radiusMd, padding: '9px 12px' }}>
             <div style={{ color: '#79c0ff', fontSize: 12, lineHeight: 1.6 }}>支持所有 OpenAI 兼容接口（Gemini、DeepSeek 等）</div>
@@ -829,12 +829,12 @@ function SettingsPage({ user }) {
             <FormItem label="Base URL">
               <input value={form.baseUrl || ''} onChange={e => setForm({ ...form, baseUrl: e.target.value })}
                 placeholder="https://ai.example.com/v1" style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5 }} />
-            </FormItem>
+            </div>
 
             <FormItem label="System Prompt" hint="对用户隐藏">
               <textarea value={form.systemPrompt || ''} onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
                 rows={14} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.7, fontSize: 13 }} />
-            </FormItem>
+            </div>
           </div>
         )}
       </div>
