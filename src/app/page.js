@@ -11,6 +11,120 @@ function Spinner({ size = 16 }) {
   )
 }
 
+// ─── MARKDOWN RENDERER ────────────────────────────────────────────────────────
+function MarkdownRenderer({ content }) {
+  if (!content) return null
+
+  const lines = content.split('
+')
+  const elements = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // H3
+    if (line.startsWith('### ')) {
+      elements.push(<h3 key={i} style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 700, margin: '20px 0 8px', letterSpacing: '-0.2px' }}>{renderInline(line.slice(4))}</h3>)
+    }
+    // H2
+    else if (line.startsWith('## ')) {
+      elements.push(<h2 key={i} style={{ color: '#f1f5f9', fontSize: 15.5, fontWeight: 700, margin: '24px 0 10px', letterSpacing: '-0.3px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 8 }}>{renderInline(line.slice(3))}</h2>)
+    }
+    // H1
+    else if (line.startsWith('# ')) {
+      elements.push(<h1 key={i} style={{ color: '#f8fafc', fontSize: 17, fontWeight: 700, margin: '0 0 14px', letterSpacing: '-0.4px' }}>{renderInline(line.slice(2))}</h1>)
+    }
+    // HR
+    else if (line.trim() === '---') {
+      elements.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.08)', margin: '18px 0' }} />)
+    }
+    // Bullet list
+    else if (line.match(/^[\*\-] /)) {
+      const items = []
+      while (i < lines.length && lines[i].match(/^[\*\-] /)) {
+        items.push(<li key={i} style={{ marginBottom: 5, lineHeight: 1.75 }}>{renderInline(lines[i].slice(2))}</li>)
+        i++
+      }
+      elements.push(<ul key={`ul-${i}`} style={{ paddingLeft: 18, margin: '6px 0 10px', color: 'rgba(255,255,255,0.8)' }}>{items}</ul>)
+      continue
+    }
+    // Numbered list
+    else if (line.match(/^\d+\. /)) {
+      const items = []
+      while (i < lines.length && lines[i].match(/^\d+\. /)) {
+        items.push(<li key={i} style={{ marginBottom: 5, lineHeight: 1.75 }}>{renderInline(lines[i].replace(/^\d+\. /, ''))}</li>)
+        i++
+      }
+      elements.push(<ol key={`ol-${i}`} style={{ paddingLeft: 20, margin: '6px 0 10px', color: 'rgba(255,255,255,0.8)' }}>{items}</ol>)
+      continue
+    }
+    // Blockquote
+    else if (line.startsWith('> ')) {
+      elements.push(<blockquote key={i} style={{ borderLeft: '3px solid rgba(96,165,250,0.5)', margin: '10px 0', paddingLeft: 12, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', fontSize: 13 }}>{renderInline(line.slice(2))}</blockquote>)
+    }
+    // Empty line
+    else if (line.trim() === '') {
+      elements.push(<div key={i} style={{ height: 6 }} />)
+    }
+    // Normal paragraph
+    else {
+      elements.push(<p key={i} style={{ margin: '2px 0 8px', lineHeight: 1.8, color: 'rgba(255,255,255,0.82)' }}>{renderInline(line)}</p>)
+    }
+    i++
+  }
+
+  return <div style={{ fontSize: 13.5 }}>{elements}</div>
+}
+
+function renderInline(text) {
+  // Parse bold, italic, code, colored text inline
+  const parts = []
+  let remaining = text
+  let key = 0
+
+  while (remaining.length > 0) {
+    // Bold+italic ***text***
+    const boldItalic = remaining.match(/^\*\*\*(.*?)\*\*\*/)
+    if (boldItalic) {
+      parts.push(<strong key={key++} style={{ fontWeight: 700, fontStyle: 'italic', color: '#f1f5f9' }}>{boldItalic[1]}</strong>)
+      remaining = remaining.slice(boldItalic[0].length)
+      continue
+    }
+    // Bold **text**
+    const bold = remaining.match(/^\*\*(.*?)\*\*/)
+    if (bold) {
+      parts.push(<strong key={key++} style={{ fontWeight: 700, color: '#e2e8f0' }}>{bold[1]}</strong>)
+      remaining = remaining.slice(bold[0].length)
+      continue
+    }
+    // Italic *text*
+    const italic = remaining.match(/^\*(.*?)\*/)
+    if (italic) {
+      parts.push(<em key={key++} style={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.7)' }}>{italic[1]}</em>)
+      remaining = remaining.slice(italic[0].length)
+      continue
+    }
+    // Inline code `text`
+    const code = remaining.match(/^`(.*?)`/)
+    if (code) {
+      parts.push(<code key={key++} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.9em', color: '#93c5fd' }}>{code[1]}</code>)
+      remaining = remaining.slice(code[0].length)
+      continue
+    }
+    // Next special char
+    const next = remaining.search(/[\*`]/)
+    if (next === -1) {
+      parts.push(<span key={key++}>{remaining}</span>)
+      break
+    }
+    parts.push(<span key={key++}>{remaining.slice(0, next)}</span>)
+    remaining = remaining.slice(next)
+  }
+
+  return parts.length === 1 && typeof parts[0]?.props?.children === 'string' ? parts[0].props.children : parts
+}
+
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('')
@@ -144,61 +258,85 @@ function QueryPage({ user }) {
   const inputBase = { width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '11px 14px', color: '#fff', fontSize: 14, lineHeight: 1.6 }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-      <div>
-        <h1 style={{ color: '#fff', fontSize: 25, fontWeight: 700, letterSpacing: '-0.5px' }}>外贸背景调查</h1>
-        <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: 13.5, marginTop: 5 }}>输入公司信息与询盘内容，AI 将为您进行专业背调分析</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h1 style={{ color: '#fff', fontSize: 25, fontWeight: 700, letterSpacing: '-0.5px' }}>外贸背景调查</h1>
+          <p style={{ color: 'rgba(255,255,255,0.38)', fontSize: 13.5, marginTop: 5 }}>输入公司信息与询盘内容，AI 将为您进行专业背调分析</p>
+        </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-        <div style={panel}>
-          <div style={sLabel}>输入信息</div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.65)', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-              <span style={{ width: 19, height: 19, borderRadius: 5, background: 'rgba(26,86,219,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#60a5fa', fontWeight: 700 }}>1</span>
+
+      {/* Input area — compact horizontal layout */}
+      <div style={{ ...panel, padding: '20px 24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16, marginBottom: 16 }}>
+          {/* URL */}
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 12.5, fontWeight: 500, marginBottom: 7 }}>
+              <span style={{ width: 17, height: 17, borderRadius: 4, background: 'rgba(26,86,219,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, color: '#60a5fa', fontWeight: 700 }}>1</span>
               公司网址
             </label>
             <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com"
-              style={{ ...inputBase, fontFamily: "'DM Mono', monospace", fontSize: 13 }} />
+              style={{ ...inputBase, fontFamily: "'DM Mono', monospace", fontSize: 12.5, padding: '9px 12px' }} />
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.65)', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-              <span style={{ width: 19, height: 19, borderRadius: 5, background: 'rgba(26,86,219,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#60a5fa', fontWeight: 700 }}>2</span>
+          {/* Inquiry */}
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 12.5, fontWeight: 500, marginBottom: 7 }}>
+              <span style={{ width: 17, height: 17, borderRadius: 4, background: 'rgba(26,86,219,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, color: '#60a5fa', fontWeight: 700 }}>2</span>
               询盘详细信息
             </label>
-            <textarea value={inquiry} onChange={e => setInquiry(e.target.value)} placeholder="请粘贴完整的询盘邮件内容、买家信息等..." rows={11} style={inputBase} />
+            <textarea value={inquiry} onChange={e => setInquiry(e.target.value)}
+              placeholder="粘贴询盘邮件内容、买家信息等..." rows={4}
+              style={{ ...inputBase, padding: '9px 12px', fontSize: 13 }} />
           </div>
-          {error && (
-            <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
-              <div style={{ color: '#fc8181', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>⚠ 请求失败</div>
-              <div style={{ color: '#fca5a5', fontSize: 13, lineHeight: 1.6 }}>{error}</div>
-            </div>
-          )}
-          <button onClick={analyze} disabled={loading}
-            style={{ width: '100%', padding: 12, border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', background: loading ? 'rgba(26,86,219,0.38)' : 'linear-gradient(135deg,#1a56db,#0ea5e9)', color: '#fff', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            {loading ? <><Spinner />AI 分析中...</> : <>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              开始背调分析
-            </>}
-          </button>
         </div>
 
-        <div style={{ ...panel, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div style={sLabel}>分析结果</div>
-            {result && !streaming && (
-              <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${riskColor[extractRisk(result)]}18`, color: riskColor[extractRisk(result)], border: `1px solid ${riskColor[extractRisk(result)]}38`, letterSpacing: '0.04em' }}>
-                {riskLabel[extractRisk(result)]}
-              </span>
-            )}
-            {streaming && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#60a5fa', fontSize: 12 }}><Spinner size={12} />生成中...</div>
-            )}
+        {/* Error */}
+        {error && (
+          <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+            <div style={{ color: '#fc8181', fontSize: 13, fontWeight: 600, marginBottom: 2 }}>⚠ 请求失败</div>
+            <div style={{ color: '#fca5a5', fontSize: 12.5, lineHeight: 1.6 }}>{error}</div>
           </div>
-          <div style={{ flex: 1, minHeight: 380, background: 'rgba(0,0,0,0.18)', borderRadius: 10, padding: 16, overflowY: 'auto', whiteSpace: 'pre-wrap', color: result ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)', fontSize: 13.5, lineHeight: 1.85 }}>
-            {result || '分析结果将在此处显示...'}
+        )}
+
+        {/* Button */}
+        <button onClick={analyze} disabled={loading}
+          style={{ width: '100%', padding: '11px', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', background: loading ? 'rgba(26,86,219,0.38)' : 'linear-gradient(135deg,#1a56db,#0ea5e9)', color: '#fff', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          {loading ? <><Spinner />AI 分析中...</> : <>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            开始背调分析
+          </>}
+        </button>
+      </div>
+
+      {/* Output area — full width, expands naturally */}
+      {(result || streaming) && (
+        <div style={panel}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div style={sLabel}>分析结果</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {streaming && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#60a5fa', fontSize: 12 }}><Spinner size={12} />生成中...</div>
+              )}
+              {result && !streaming && (
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${riskColor[extractRisk(result)]}18`, color: riskColor[extractRisk(result)], border: `1px solid ${riskColor[extractRisk(result)]}38`, letterSpacing: '0.04em' }}>
+                  {riskLabel[extractRisk(result)]}
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '20px 24px' }}>
+            <MarkdownRenderer content={result} />
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Empty state */}
+      {!result && !streaming && !loading && (
+        <div style={{ ...panel, padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ color: 'rgba(255,255,255,0.12)', fontSize: 13.5 }}>填写上方信息后点击开始分析</div>
+        </div>
+      )}
     </div>
   )
 }
@@ -250,7 +388,7 @@ function HistoryPage({ user }) {
                   <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {q.url && <div><div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>公司网址</div><div style={{ color: '#60a5fa', fontSize: 12.5, fontFamily: 'monospace' }}>{q.url}</div></div>}
                     {q.inquiry && <div><div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>询盘信息</div><div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12.5, lineHeight: 1.65, background: 'rgba(0,0,0,0.18)', borderRadius: 8, padding: '9px 12px', maxHeight: 110, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>{q.inquiry}</div></div>}
-                    <div><div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>分析结果</div><div style={{ color: 'rgba(255,255,255,0.78)', fontSize: 12.5, lineHeight: 1.8, background: 'rgba(0,0,0,0.18)', borderRadius: 8, padding: '12px 14px', maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>{q.result}</div></div>
+                    <div><div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>分析结果</div><div style={{ background: 'rgba(0,0,0,0.18)', borderRadius: 8, padding: '12px 14px', maxHeight: 320, overflowY: 'auto' }}><MarkdownRenderer content={q.result} /></div></div>
                   </div>
                 )}
               </div>
