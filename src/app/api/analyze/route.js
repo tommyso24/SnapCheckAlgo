@@ -1,9 +1,6 @@
 import { requireSession } from '@/lib/auth'
 import { getGlobalSettings, getUserSettings, saveQuery } from '@/lib/kv'
 
-// Node runtime — stream proxying keeps connection alive beyond default timeout
-export const runtime = 'nodejs'
-export const maxDuration = 60
 
 export async function POST(req) {
   const { session, error, status } = await requireSession()
