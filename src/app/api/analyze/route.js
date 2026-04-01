@@ -81,7 +81,7 @@ export async function POST(req) {
 
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
-  const HEARTBEAT_INTERVAL = 15000
+  const HEARTBEAT_INTERVAL = 8000
   let heartbeatTimer = null
 
   const stream = new ReadableStream({

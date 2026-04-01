@@ -380,10 +380,11 @@ function QueryPage({ user }) {
     setLoading(true); setError(''); setResult(''); setStreaming(true)
 
     const abortCtrl = new AbortController()
-    // Safety timeout: abort if no data received for 30s
-    let lastDataAt = Date.now()
+    // Safety timeout: abort if no real content received for 60s
+    // (heartbeat pings keep connection alive but don't reset this timer)
+    let lastContentAt = Date.now()
     const watchdog = setInterval(() => {
-      if (Date.now() - lastDataAt > 30000) {
+      if (Date.now() - lastContentAt > 60000) {
         abortCtrl.abort()
         clearInterval(watchdog)
       }
@@ -408,7 +409,7 @@ function QueryPage({ user }) {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        lastDataAt = Date.now() // reset watchdog on any data
+        // lastContentAt is reset below only when actual delta arrives
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
@@ -420,6 +421,7 @@ function QueryPage({ user }) {
             const msg = JSON.parse(raw)
             if (msg.error) throw new Error(msg.error)
             if (msg.delta) {
+              lastContentAt = Date.now() // reset watchdog on real content
               setResult(prev => prev + msg.delta)
               if (resultRef.current) resultRef.current.scrollTop = resultRef.current.scrollHeight
             }
@@ -428,7 +430,7 @@ function QueryPage({ user }) {
       }
     } catch (e) {
       if (e.name === 'AbortError') {
-        setError('连接超时：30秒内未收到响应，请重试。如持续出现，请检查 API 配置。')
+        setError('连接超时：60秒内未收到 AI 响应，请重试。如持续出现，可能是模型响应过慢或 API 配置问题。')
       } else {
         setError(e.message)
       }
