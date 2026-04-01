@@ -500,7 +500,7 @@ function HistoryPage({ user }) {
 
                   {/* Expanded detail */}
                   {selected === i && (
-                    <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
                       {q.url && (
                         <div>
                           <div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>公司网址 / 信息</div>
