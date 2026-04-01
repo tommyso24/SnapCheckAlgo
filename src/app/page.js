@@ -74,8 +74,6 @@ function QueryPage({ user }) {
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [streaming, setStreaming] = useState(false)
-  const resultRef = useRef(null)
 
   const riskColor = { high: '#fc8181', medium: '#f6ad55', low: '#68d391', unknown: '#718096' }
   const riskLabel = { high: '高风险', medium: '中风险', low: '低风险', unknown: '未知' }
@@ -83,7 +81,7 @@ function QueryPage({ user }) {
 
   const analyze = async () => {
     if (!url.trim() && !inquiry.trim()) { setError('请至少填写公司网址或询盘信息'); return }
-    setLoading(true); setError(''); setResult(''); setStreaming(true)
+    setLoading(true); setError(''); setResult('')
 
     try {
       const res = await fetch('/api/analyze', {
@@ -92,56 +90,15 @@ function QueryPage({ user }) {
         body: JSON.stringify({ url, inquiry }),
       })
 
-      // Non-streaming error (4xx/5xx before stream starts)
-      if (!res.ok) {
-        const ct = res.headers.get('content-type') || ''
-        if (ct.includes('application/json')) {
-          const d = await res.json()
-          throw new Error(d.error || `服务器错误 ${res.status}`)
-        } else {
-          throw new Error(`服务器错误 ${res.status}`)
-        }
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let full = ''
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() // keep incomplete line
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            // Check for error injected into stream
-            if (parsed.error) throw new Error(parsed.error)
-            const delta = parsed.choices?.[0]?.delta?.content || ''
-            full += delta
-            setResult(full)
-            if (resultRef.current) resultRef.current.scrollTop = resultRef.current.scrollHeight
-          } catch (e) {
-            if (e.message !== 'Unexpected end of JSON input') throw e
-          }
-        }
-      }
-
-      if (!full) throw new Error('AI 返回了空响应，请检查 API Key 和 Model Name 是否正确')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `服务器错误 ${res.status}`)
+      setResult(data.result || '')
 
     } catch (e) {
       setError(e.message)
       setResult('')
     } finally {
       setLoading(false)
-      setStreaming(false)
     }
   }
 
@@ -196,11 +153,11 @@ function QueryPage({ user }) {
                 {riskLabel[extractRisk(result)]}
               </span>
             )}
-            {streaming && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#60a5fa', fontSize: 12 }}><Spinner size={12} />生成中</div>
+            {loading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#60a5fa', fontSize: 12 }}><Spinner size={12} />分析中...</div>
             )}
           </div>
-          <div ref={resultRef} style={{ flex: 1, minHeight: 380, background: 'rgba(0,0,0,0.18)', borderRadius: 10, padding: 16, overflowY: 'auto', whiteSpace: 'pre-wrap', color: result ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)', fontSize: 13.5, lineHeight: 1.85 }}>
+          <div style={{ flex: 1, minHeight: 380, background: 'rgba(0,0,0,0.18)', borderRadius: 10, padding: 16, overflowY: 'auto', whiteSpace: 'pre-wrap', color: result ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)', fontSize: 13.5, lineHeight: 1.85 }}>
             {result || '分析结果将在此处显示...'}
           </div>
         </div>
