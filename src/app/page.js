@@ -1,42 +1,42 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react'
 
-// ─── DESIGN TOKENS (Ant Design inspired) ─────────────────────────────────────
+// ─── DESIGN TOKENS (Claude-inspired) ─────────────────────────────────────────
 const T = {
-  // Colors
-  primary:      '#1677ff',
-  primaryHover: '#4096ff',
-  primaryBg:    'rgba(22,119,255,0.08)',
-  primaryBorder:'rgba(22,119,255,0.35)',
-  success:      '#52c41a',
-  successBg:    'rgba(82,196,26,0.1)',
-  warning:      '#faad14',
-  warningBg:    'rgba(250,173,20,0.1)',
-  error:        '#ff4d4f',
-  errorBg:      'rgba(255,77,79,0.1)',
-  // Text
-  textPrimary:  'rgba(255,255,255,0.88)',
-  textSecondary:'rgba(255,255,255,0.55)',
-  textTertiary: 'rgba(255,255,255,0.3)',
-  textDisabled: 'rgba(255,255,255,0.18)',
-  // Surface
+  // Colors — warm, not cold blue-black
+  primary:      '#d97706',   // warm amber accent (Claude's orange-ish tone)
+  primaryHover: '#f59e0b',
+  primaryBg:    'rgba(217,119,6,0.1)',
+  primaryBorder:'rgba(217,119,6,0.3)',
+  success:      '#34d399',
+  successBg:    'rgba(52,211,153,0.1)',
+  warning:      '#fbbf24',
+  warningBg:    'rgba(251,191,36,0.1)',
+  error:        '#f87171',
+  errorBg:      'rgba(248,113,113,0.1)',
+  // Text — warm whites, not cold whites
+  textPrimary:  'rgba(255,248,235,0.9)',   // warm white
+  textSecondary:'rgba(255,248,235,0.6)',
+  textTertiary: 'rgba(255,248,235,0.35)',
+  textDisabled: 'rgba(255,248,235,0.2)',
+  // Surface — warm dark grays (Claude's palette)
   bgContainer:  'rgba(255,255,255,0.04)',
-  bgElevated:   'rgba(255,255,255,0.06)',
-  bgLayout:     '#0d1117',
-  bgSider:      '#161b22',
-  // Border
-  border:       'rgba(255,255,255,0.1)',
-  borderSecond: 'rgba(255,255,255,0.06)',
+  bgElevated:   'rgba(255,255,255,0.05)',
+  bgLayout:     '#1a1a17',   // warm dark, not cold GitHub dark
+  bgSider:      '#201f1b',   // slightly warmer panel
+  // Border — warm subtle
+  border:       'rgba(255,248,235,0.1)',
+  borderSecond: 'rgba(255,248,235,0.06)',
   // Radius
   radiusSm: 6,
   radiusMd: 8,
   radiusLg: 12,
   // Shadow
-  shadow: '0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06)',
-  // Fonts
-  fontUI:   "'DM Sans', system-ui, sans-serif",
-  fontBody: "'Lora', 'Noto Serif SC', 'Source Han Serif SC', Georgia, serif",
-  fontMono: "'DM Mono', 'Fira Code', monospace",
+  shadow: '0 1px 2px rgba(0,0,0,0.3)',
+  // Fonts — system fonts like Claude (no Google Fonts needed)
+  fontUI:   "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+  fontBody: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+  fontMono: "'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace",
 }
 
 // ─── SPINNER ──────────────────────────────────────────────────────────────────
@@ -51,14 +51,14 @@ function Spinner({ size = 16, color }) {
 }
 
 // ─── MARKDOWN RENDERER ────────────────────────────────────────────────────────
-// Color palette for semantic sections
+// Subtle section accent colors — warm tones, low saturation
 const MD_SECTION_COLORS = [
-  { bg: 'rgba(22,119,255,0.06)',  border: 'rgba(22,119,255,0.35)',  dot: '#1677ff' },   // blue
-  { bg: 'rgba(82,196,26,0.06)',   border: 'rgba(82,196,26,0.35)',   dot: '#52c41a' },   // green
-  { bg: 'rgba(250,173,20,0.06)',  border: 'rgba(250,173,20,0.35)',  dot: '#faad14' },   // amber
-  { bg: 'rgba(114,46,209,0.06)',  border: 'rgba(114,46,209,0.35)',  dot: '#722ed1' },   // purple
-  { bg: 'rgba(19,194,194,0.06)',  border: 'rgba(19,194,194,0.35)',  dot: '#13c2c2' },   // cyan
-  { bg: 'rgba(250,84,28,0.06)',   border: 'rgba(250,84,28,0.35)',   dot: '#fa541c' },   // orange
+  { border: 'rgba(251,191,36,0.5)',  bg: 'rgba(251,191,36,0.05)',  dot: '#fbbf24' },  // amber
+  { border: 'rgba(52,211,153,0.5)',  bg: 'rgba(52,211,153,0.05)',  dot: '#34d399' },  // teal
+  { border: 'rgba(167,139,250,0.5)', bg: 'rgba(167,139,250,0.05)', dot: '#a78bfa' },  // violet
+  { border: 'rgba(251,146,60,0.5)',  bg: 'rgba(251,146,60,0.05)',  dot: '#fb923c' },  // orange
+  { border: 'rgba(96,165,250,0.5)',  bg: 'rgba(96,165,250,0.05)',  dot: '#60a5fa' },  // blue
+  { border: 'rgba(244,114,182,0.5)', bg: 'rgba(244,114,182,0.05)', dot: '#f472b6' },  // pink
 ]
 
 function MarkdownRenderer({ content }) {
@@ -68,63 +68,60 @@ function MarkdownRenderer({ content }) {
   let i = 0
   let h2Count = 0
 
+  // Base text style — matches Claude's body text
+  const base = { fontFamily: T.fontBody, fontSize: 15, lineHeight: 1.75, color: T.textSecondary }
+
   while (i < lines.length) {
     const line = lines[i]
 
-    // H1 — document title
+    // H1
     if (line.startsWith('# ')) {
       elements.push(
-        <h1 key={i} style={{ fontFamily: T.fontBody, color: 'rgba(255,255,255,0.95)', fontSize: 20, fontWeight: 700, margin: '0 0 18px', lineHeight: 1.4, letterSpacing: '-0.3px' }}>
+        <h1 key={i} style={{ ...base, color: T.textPrimary, fontSize: 18, fontWeight: 600, margin: '0 0 16px', lineHeight: 1.4 }}>
           {renderInline(line.slice(2))}
         </h1>
       )
 
-    // H2 — major section with colored left border card
+    // H2 — section header with accent bar
     } else if (line.startsWith('## ')) {
       const col = MD_SECTION_COLORS[h2Count % MD_SECTION_COLORS.length]
       h2Count++
       elements.push(
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '28px 0 12px', padding: '10px 16px', background: col.bg, borderLeft: `3px solid ${col.border}`, borderRadius: '0 8px 8px 0' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: col.dot, flexShrink: 0 }} />
-          <h2 style={{ margin: 0, fontFamily: T.fontUI, color: 'rgba(255,255,255,0.92)', fontSize: 14.5, fontWeight: 600, letterSpacing: '-0.1px' }}>
+        <div key={i} style={{ margin: '24px 0 10px', borderLeft: `3px solid ${col.border}`, paddingLeft: 12, background: col.bg, borderRadius: '0 6px 6px 0', padding: '8px 14px' }}>
+          <h2 style={{ margin: 0, fontFamily: T.fontUI, color: T.textPrimary, fontSize: 15, fontWeight: 600 }}>
             {renderInline(line.slice(3))}
           </h2>
         </div>
       )
 
-    // H3 — subsection
+    // H3
     } else if (line.startsWith('### ')) {
       elements.push(
-        <h3 key={i} style={{ fontFamily: T.fontUI, color: 'rgba(255,255,255,0.8)', fontSize: 13.5, fontWeight: 600, margin: '18px 0 7px', display: 'flex', alignItems: 'center', gap: 7 }}>
-          <span style={{ width: 12, height: 1.5, background: 'rgba(255,255,255,0.2)', display: 'inline-block', borderRadius: 1 }} />
+        <h3 key={i} style={{ ...base, color: T.textPrimary, fontSize: 15, fontWeight: 600, margin: '16px 0 6px' }}>
           {renderInline(line.slice(4))}
         </h3>
       )
 
-    // HR — section divider
+    // HR
     } else if (line.trim() === '---') {
-      elements.push(<hr key={i} style={{ border: 'none', borderTop: `1px solid ${T.borderSecond}`, margin: '20px 0' }} />)
+      elements.push(<hr key={i} style={{ border: 'none', borderTop: `1px solid ${T.borderSecond}`, margin: '18px 0' }} />)
 
     // Bullet list
     } else if (/^[*-] /.test(line)) {
       const items = []
       while (i < lines.length && /^[*-] /.test(lines[i])) {
-        items.push(
-          <li key={i} style={{ marginBottom: 6, lineHeight: 1.8, color: 'rgba(255,255,255,0.72)', fontFamily: T.fontBody, fontSize: 14 }}>
-            {renderInline(lines[i].slice(2))}
-          </li>
-        )
+        items.push({ text: lines[i].slice(2), key: i })
         i++
       }
       elements.push(
-        <ul key={`ul-${i}`} style={{ paddingLeft: 0, margin: '8px 0 12px', listStyle: 'none' }}>
-          {items.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 10, marginBottom: 5 }}>
-              <span style={{ color: T.primary, marginTop: 7, flexShrink: 0, fontSize: 8 }}>◆</span>
-              <div style={{ flex: 1 }}>{item}</div>
+        <div key={`ul-${i}`} style={{ margin: '6px 0 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {items.map(item => (
+            <div key={item.key} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ color: T.primary, flexShrink: 0, fontSize: 12, marginTop: 4, opacity: 0.8 }}>•</span>
+              <span style={{ ...base, flex: 1 }}>{renderInline(item.text)}</span>
             </div>
           ))}
-        </ul>
+        </div>
       )
       continue
 
@@ -133,37 +130,37 @@ function MarkdownRenderer({ content }) {
       const items = []
       let num = 1
       while (i < lines.length && /^\d+\. /.test(lines[i])) {
-        items.push({ num: num++, content: lines[i].replace(/^\d+\. /, ''), key: i })
+        items.push({ num: num++, text: lines[i].replace(/^\d+\. /, ''), key: i })
         i++
       }
       elements.push(
-        <ol key={`ol-${i}`} style={{ paddingLeft: 0, margin: '8px 0 12px', listStyle: 'none' }}>
+        <div key={`ol-${i}`} style={{ margin: '6px 0 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {items.map(item => (
-            <div key={item.key} style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
-              <span style={{ width: 20, height: 20, borderRadius: '50%', background: T.primaryBg, border: `1px solid ${T.primaryBorder}`, color: T.primary, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>{item.num}</span>
-              <div style={{ flex: 1, fontFamily: T.fontBody, fontSize: 14, color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>{renderInline(item.content)}</div>
+            <div key={item.key} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ color: T.textTertiary, flexShrink: 0, fontSize: 13, fontWeight: 500, minWidth: 18, textAlign: 'right', marginTop: 2 }}>{item.num}.</span>
+              <span style={{ ...base, flex: 1 }}>{renderInline(item.text)}</span>
             </div>
           ))}
-        </ol>
+        </div>
       )
       continue
 
-    // Blockquote — styled callout
+    // Blockquote
     } else if (line.startsWith('> ')) {
       elements.push(
-        <blockquote key={i} style={{ margin: '10px 0', padding: '10px 16px', background: 'rgba(255,255,255,0.03)', borderLeft: '3px solid rgba(255,255,255,0.15)', borderRadius: '0 6px 6px 0', fontFamily: T.fontBody, color: 'rgba(255,255,255,0.55)', fontSize: 13.5, fontStyle: 'italic', lineHeight: 1.75 }}>
+        <blockquote key={i} style={{ margin: '8px 0', padding: '8px 14px', background: T.bgContainer, borderLeft: `2px solid ${T.border}`, borderRadius: '0 6px 6px 0', color: T.textTertiary, fontSize: 14, fontStyle: 'italic', lineHeight: 1.7 }}>
           {renderInline(line.slice(2))}
         </blockquote>
       )
 
     // Empty line
     } else if (line.trim() === '') {
-      elements.push(<div key={i} style={{ height: 5 }} />)
+      elements.push(<div key={i} style={{ height: 4 }} />)
 
     // Paragraph
     } else {
       elements.push(
-        <p key={i} style={{ margin: '3px 0 8px', lineHeight: 1.85, color: 'rgba(255,255,255,0.72)', fontFamily: T.fontBody, fontSize: 14 }}>
+        <p key={i} style={{ ...base, margin: '2px 0 6px' }}>
           {renderInline(line)}
         </p>
       )
@@ -183,29 +180,25 @@ function renderInline(text) {
     // Bold+italic
     const bi = remaining.match(/^\*\*\*(.*?)\*\*\*/)
     if (bi) {
-      parts.push(<strong key={key++} style={{ fontWeight: 700, fontStyle: 'italic', color: 'rgba(255,255,255,0.95)', fontFamily: T.fontBody }}>{bi[1]}</strong>)
+      parts.push(<strong key={key++} style={{ fontWeight: 600, fontStyle: 'italic', color: T.textPrimary }}>{bi[1]}</strong>)
       remaining = remaining.slice(bi[0].length); continue
     }
-    // Bold — highlighted with subtle warm glow
+    // Bold
     const b = remaining.match(/^\*\*(.*?)\*\*/)
     if (b) {
-      parts.push(
-        <strong key={key++} style={{ fontWeight: 700, color: 'rgba(255,255,255,0.95)', background: 'rgba(250,173,20,0.1)', padding: '0 3px', borderRadius: 3, fontFamily: T.fontUI }}>
-          {b[1]}
-        </strong>
-      )
+      parts.push(<strong key={key++} style={{ fontWeight: 600, color: T.textPrimary }}>{b[1]}</strong>)
       remaining = remaining.slice(b[0].length); continue
     }
     // Italic
     const it = remaining.match(/^\*(.*?)\*/)
     if (it) {
-      parts.push(<em key={key++} style={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.6)', fontFamily: T.fontBody }}>{it[1]}</em>)
+      parts.push(<em key={key++} style={{ fontStyle: 'italic', color: T.textSecondary }}>{it[1]}</em>)
       remaining = remaining.slice(it[0].length); continue
     }
     // Code
     const co = remaining.match(/^`(.*?)`/)
     if (co) {
-      parts.push(<code key={key++} style={{ background: 'rgba(22,119,255,0.12)', border: '1px solid rgba(22,119,255,0.2)', borderRadius: 4, padding: '1px 6px', fontFamily: T.fontMono, fontSize: '0.87em', color: '#79c0ff' }}>{co[1]}</code>)
+      parts.push(<code key={key++} style={{ background: 'rgba(255,248,235,0.07)', border: `1px solid ${T.border}`, borderRadius: 4, padding: '1px 6px', fontFamily: T.fontMono, fontSize: '0.88em', color: 'rgba(255,248,235,0.75)' }}>{co[1]}</code>)
       remaining = remaining.slice(co[0].length); continue
     }
     const next = remaining.search(/[\*`]/)
