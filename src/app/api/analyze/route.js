@@ -11,9 +11,9 @@ export async function POST(req) {
   try { body = await req.json() }
   catch { return Response.json({ error: '请求格式错误' }, { status: 400 }) }
 
-  const { url, inquiry } = body
-  if (!url?.trim() && !inquiry?.trim()) {
-    return Response.json({ error: '请至少填写公司网址或询盘信息' }, { status: 400 })
+  const { url, inquiry, images = [] } = body
+  if (!url?.trim() && !inquiry?.trim() && images.length === 0) {
+    return Response.json({ error: '请填写信息或上传图片' }, { status: 400 })
   }
 
   const [globalSettings, userSettings] = await Promise.all([
@@ -30,7 +30,26 @@ export async function POST(req) {
   if (!apiKey) return Response.json({ error: '请先在【设置】中填写您的 API Key' }, { status: 400 })
 
   const endpoint = baseUrl.replace(/\/$/, '') + '/chat/completions'
-  const userContent = `**公司网址：** ${url || '未提供'}\n\n**询盘详细信息：**\n${inquiry || '未提供'}`
+
+  // Build user message — text + optional images
+  const textPart = `**公司网址：** ${url || '未提供'}\n\n**询盘详细信息：**\n${inquiry || '未提供'}`
+
+  let userContent
+  if (images.length > 0) {
+    // Multimodal: mix text and image_url parts
+    userContent = [
+      { type: 'text', text: textPart },
+      ...images.map(img => ({
+        type: 'image_url',
+        image_url: {
+          url: `data:${img.type || 'image/jpeg'};base64,${img.base64}`,
+          detail: 'high',
+        },
+      })),
+    ]
+  } else {
+    userContent = textPart
+  }
 
   let upstreamRes
   try {
@@ -62,9 +81,6 @@ export async function POST(req) {
 
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
-
-  // Heartbeat: send a comment line every 15s to keep the connection alive
-  // SSE comment lines (": ping\n\n") are ignored by the client but prevent proxy timeouts
   const HEARTBEAT_INTERVAL = 15000
   let heartbeatTimer = null
 
@@ -74,7 +90,6 @@ export async function POST(req) {
         try { controller.enqueue(encoder.encode(data)) } catch {}
       }
 
-      // Start heartbeat
       heartbeatTimer = setInterval(() => {
         enqueue(': ping\n\n')
       }, HEARTBEAT_INTERVAL)
@@ -87,11 +102,9 @@ export async function POST(req) {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
           buffer = lines.pop() ?? ''
-
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6).trim()
@@ -110,18 +123,17 @@ export async function POST(req) {
         enqueue(`data: ${JSON.stringify({ error: `流中断：${e.message}` })}\n\n`)
       } finally {
         clearInterval(heartbeatTimer)
-
         if (fullText) {
           const riskLevel = fullText.includes('高风险') ? 'high'
             : fullText.includes('中风险') ? 'medium'
             : fullText.includes('低风险') ? 'low' : 'unknown'
-
           enqueue(`data: ${JSON.stringify({ done: true, result: fullText, riskLevel })}\n\n`)
-
           saveQuery({
             userEmail: session.email,
             url: url?.trim() || '',
             inquiry: inquiry?.trim() || '',
+            hasImages: images.length > 0,
+            imageCount: images.length,
             result: fullText,
             riskLevel,
             createdAt: new Date().toISOString(),
@@ -130,14 +142,10 @@ export async function POST(req) {
         } else {
           enqueue(`data: ${JSON.stringify({ error: 'AI 返回空内容，请检查 Model Name 是否正确' })}\n\n`)
         }
-
         try { controller.close() } catch {}
       }
     },
-
-    cancel() {
-      clearInterval(heartbeatTimer)
-    }
+    cancel() { clearInterval(heartbeatTimer) }
   })
 
   return new Response(stream, {

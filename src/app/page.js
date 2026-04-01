@@ -341,14 +341,42 @@ function LoginPage({ onLogin }) {
 function QueryPage({ user }) {
   const [url, setUrl] = useState('')
   const [inquiry, setInquiry] = useState('')
+  const [images, setImages] = useState([])       // [{name, base64, preview}]
+  const [dragOver, setDragOver] = useState(false)
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
   const resultRef = useRef(null)
+  const fileInputRef = useRef(null)
+
+  const processFiles = (files) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    const valid = Array.from(files).filter(f => allowed.includes(f.type)).slice(0, 4)
+    valid.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const base64 = e.target.result.split(',')[1]
+        const preview = e.target.result
+        setImages(prev => {
+          if (prev.length >= 4) return prev
+          if (prev.find(img => img.name === file.name && img.base64 === base64)) return prev
+          return [...prev, { name: file.name, base64, preview, type: file.type }]
+        })
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault(); setDragOver(false)
+    processFiles(e.dataTransfer.files)
+  }
+
+  const removeImage = (idx) => setImages(prev => prev.filter((_, i) => i !== idx))
 
   const analyze = async () => {
-    if (!url.trim() && !inquiry.trim()) { setError('请至少填写公司网址或询盘信息'); return }
+    if (!url.trim() && !inquiry.trim() && images.length === 0) { setError('请填写信息或上传图片'); return }
     setLoading(true); setError(''); setResult(''); setStreaming(true)
 
     const abortCtrl = new AbortController()
@@ -365,7 +393,7 @@ function QueryPage({ user }) {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, inquiry }),
+        body: JSON.stringify({ url, inquiry, images: images.map(img => ({ base64: img.base64, type: img.type })) }),
         signal: abortCtrl.signal,
       })
       if (!res.ok) {
@@ -434,6 +462,50 @@ function QueryPage({ user }) {
             <textarea value={inquiry} onChange={e => setInquiry(e.target.value)}
               placeholder="粘贴询盘邮件内容、买家联系方式等..."
               style={{ ...inputStyle, resize: 'none', minHeight: 96, fontSize: 13 }} />
+
+            {/* Image drop zone */}
+            <div
+              onDrop={handleDrop}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                marginTop: 8, border: `1.5px dashed ${dragOver ? T.primary : T.border}`,
+                borderRadius: T.radiusMd, padding: images.length > 0 ? '10px 12px' : '12px',
+                background: dragOver ? T.primaryBg : T.bgContainer,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+                onChange={e => { processFiles(e.target.files); e.target.value = '' }} />
+
+              {images.length === 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.textTertiary, fontSize: 13 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                    <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" strokeWidth="1.8"/>
+                    <path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
+                  <span>拖拽或点击上传名片/图片（最多4张，支持 JPG、PNG）</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  {images.map((img, idx) => (
+                    <div key={idx} style={{ position: 'relative', flexShrink: 0 }}>
+                      <img src={img.preview} alt={img.name}
+                        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: T.radiusSm, border: `1px solid ${T.border}`, display: 'block' }} />
+                      <button onClick={e => { e.stopPropagation(); removeImage(idx) }}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: T.error, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {images.length < 4 && (
+                    <div style={{ width: 64, height: 64, border: `1.5px dashed ${T.border}`, borderRadius: T.radiusSm, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textTertiary, fontSize: 22 }}>+</div>
+                  )}
+                </div>
+              )}
+            </div>
           </FormItem>
         </div>
 
