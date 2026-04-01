@@ -459,7 +459,6 @@ function QueryPage({ user }) {
               placeholder={'https://example.com\n\n或提供企业的详细信息，包括但不限于企业定位，企业优势，核心目标客户等'}
               style={{ ...inputStyle, resize: 'none', flex: 1, fontFamily: "'DM Mono',monospace", fontSize: 13 }} />
           </div>
-          </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ color: T.textSecondary, fontSize: 13, fontWeight: 500, marginBottom: 6 }}>收到的询盘详细信息（或客户名片）</div>
             {/* Unified drop zone wrapping textarea + image strip */}
