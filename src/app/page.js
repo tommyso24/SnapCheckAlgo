@@ -194,6 +194,28 @@ function QueryPage({ user }) {
   const riskLabel = { high: '高风险', medium: '中风险', low: '低风险', unknown: '未知' }
   const extractRisk = t => /高风险/.test(t) ? 'high' : /中风险/.test(t) ? 'medium' : /低风险/.test(t) ? 'low' : 'unknown'
 
+  // Extract numeric score like "88 / 100" or "88/100" or "88分" from result text
+  const extractScore = (t) => {
+    const m = t.match(/(\d{1,3})\s*[\/分]\s*(?:100\s*)?(?:分|点)?/) || t.match(/(\d{1,3})\s*分/)
+    if (!m) return null
+    const n = parseInt(m[1])
+    return (n >= 0 && n <= 100) ? n : null
+  }
+
+  const scoreColor = (s) => {
+    if (s === null) return { bg: 'rgba(113,128,150,0.15)', color: '#718096', border: 'rgba(113,128,150,0.3)' }
+    if (s >= 80) return { bg: 'rgba(104,211,145,0.12)', color: '#68d391', border: 'rgba(104,211,145,0.3)' }
+    if (s >= 60) return { bg: 'rgba(246,173,85,0.12)', color: '#f6ad55', border: 'rgba(246,173,85,0.3)' }
+    return { bg: 'rgba(252,129,129,0.12)', color: '#fc8181', border: 'rgba(252,129,129,0.3)' }
+  }
+
+  const scoreLabel = (s) => {
+    if (s === null) return null
+    if (s >= 80) return `${s}分 · 低风险`
+    if (s >= 60) return `${s}分 · 中风险`
+    return `${s}分 · 高风险`
+  }
+
   const analyze = async () => {
     if (!url.trim() && !inquiry.trim()) { setError('请至少填写公司网址或询盘信息'); return }
     setLoading(true); setError(''); setResult('')
@@ -268,25 +290,26 @@ function QueryPage({ user }) {
 
       {/* Input area — compact horizontal layout */}
       <div style={{ ...panel, padding: '20px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           {/* URL */}
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 12.5, fontWeight: 500, marginBottom: 7 }}>
               <span style={{ width: 17, height: 17, borderRadius: 4, background: 'rgba(26,86,219,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, color: '#60a5fa', fontWeight: 700 }}>1</span>
-              公司网址
+              公司网址（或公司详细信息）
             </label>
-            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com"
-              style={{ ...inputBase, fontFamily: "'DM Mono', monospace", fontSize: 12.5, padding: '9px 12px' }} />
+            <textarea value={url} onChange={e => setUrl(e.target.value)}
+              placeholder={"https://example.com\n\n或粘贴公司名称、地址、联系方式等信息..."}
+              style={{ ...inputBase, padding: '9px 12px', fontSize: 13, flex: 1, resize: 'none', minHeight: 100 }} />
           </div>
           {/* Inquiry */}
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 12.5, fontWeight: 500, marginBottom: 7 }}>
               <span style={{ width: 17, height: 17, borderRadius: 4, background: 'rgba(26,86,219,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, color: '#60a5fa', fontWeight: 700 }}>2</span>
               询盘详细信息
             </label>
             <textarea value={inquiry} onChange={e => setInquiry(e.target.value)}
-              placeholder="粘贴询盘邮件内容、买家信息等..." rows={4}
-              style={{ ...inputBase, padding: '9px 12px', fontSize: 13 }} />
+              placeholder="粘贴询盘邮件内容、买家信息等..."
+              style={{ ...inputBase, padding: '9px 12px', fontSize: 13, flex: 1, resize: 'none', minHeight: 100 }} />
           </div>
         </div>
 
@@ -317,11 +340,17 @@ function QueryPage({ user }) {
               {streaming && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#60a5fa', fontSize: 12 }}><Spinner size={12} />生成中...</div>
               )}
-              {result && !streaming && (
-                <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${riskColor[extractRisk(result)]}18`, color: riskColor[extractRisk(result)], border: `1px solid ${riskColor[extractRisk(result)]}38`, letterSpacing: '0.04em' }}>
-                  {riskLabel[extractRisk(result)]}
-                </span>
-              )}
+              {result && !streaming && (() => {
+                const score = extractScore(result)
+                const col = scoreColor(score)
+                const label = scoreLabel(score) || riskLabel[extractRisk(result)]
+                return (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {score !== null && <span style={{ fontSize: 14, fontWeight: 800 }}>{score}</span>}
+                    {label}
+                  </span>
+                )
+              })()}
             </div>
           </div>
           <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '20px 24px' }}>
