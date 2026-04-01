@@ -411,13 +411,26 @@ function HistoryPage({ user }) {
     return firstLine ? firstLine.slice(0, 50) + (firstLine.length > 50 ? '...' : '') : '—'
   }
 
-  // Extract a hint from inquiry (email, domain, or company name clue)
+  // Extract a hint from inquiry (email or domain)
   const clientHint = (q) => {
     if (!q.inquiry) return null
-    const emailMatch = q.inquiry.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/i)
-    if (emailMatch) return emailMatch[0]
-    const urlMatch = q.inquiry.match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.[a-z]{2,})/i)
-    if (urlMatch) return urlMatch[0]
+    // Look for email address
+    const lines = q.inquiry.split('\n')
+    for (const line of lines) {
+      if (line.includes('@') && line.includes('.')) {
+        const parts = line.trim().split(/\s+/)
+        for (const p of parts) {
+          if (p.includes('@')) return p.replace(/[,;]+$/, '')
+        }
+      }
+    }
+    // Look for domain/url
+    for (const line of lines) {
+      if (line.includes('www.') || line.match(/[a-z0-9-]+\.(com|net|org|io|co)/i)) {
+        const m = line.match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.(?:com|net|org|io|co)[a-z.]*)/i)
+        if (m) return m[0]
+      }
+    }
     return null
   }
 
@@ -438,12 +451,12 @@ function HistoryPage({ user }) {
         : visible.length === 0
           ? <div style={{ textAlign: 'center', padding: 80, color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>暂无查询记录</div>
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {visible.map((q, i) => {
+            {visible.map((q, i) => { const recordKey = q.createdAt || i;
               const score = extractScore(q.result)
               const col = scoreColor(score)
               const hint = clientHint(q)
               return (
-                <div key={i} onClick={() => setSelected(selected === i ? null : i)}
+                <div key={recordKey} onClick={() => setSelected(selected === i ? null : i)}
                   style={{ background: selected === i ? 'rgba(26,86,219,0.09)' : 'rgba(255,255,255,0.028)', border: `1px solid ${selected === i ? 'rgba(26,86,219,0.28)' : 'rgba(255,255,255,0.065)'}`, borderRadius: 12, padding: '14px 18px', cursor: 'pointer', transition: 'all 0.18s' }}>
 
                   {/* Row 1: score badge + url + date */}
@@ -490,7 +503,10 @@ function HistoryPage({ user }) {
                       <div>
                         <div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>分析结果</div>
                         <div style={{ background: 'rgba(0,0,0,0.18)', borderRadius: 8, padding: '14px 16px', maxHeight: 360, overflowY: 'auto' }}>
-                          <MarkdownRenderer content={q.result} />
+                          {q.result
+                            ? <MarkdownRenderer content={q.result} />
+                            : <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>无内容</span>
+                          }
                         </div>
                       </div>
                     </div>
