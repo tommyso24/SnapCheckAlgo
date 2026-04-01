@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextResponse } from 'next/server'
 import { getUser, initUsers } from '@/lib/kv'
 import { signToken } from '@/lib/auth'

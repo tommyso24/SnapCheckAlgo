@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextResponse } from 'next/server'
 import { requireSession, requireAdmin } from '@/lib/auth'
 import { getGlobalSettings, saveGlobalSettings, getUserSettings, saveUserSettings } from '@/lib/kv'

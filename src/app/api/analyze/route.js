@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { requireSession } from '@/lib/auth'
 import { getGlobalSettings, getUserSettings, saveQuery } from '@/lib/kv'
 
