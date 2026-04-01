@@ -15,8 +15,7 @@ function Spinner({ size = 16 }) {
 function MarkdownRenderer({ content }) {
   if (!content) return null
 
-  const lines = content.split('
-')
+  const lines = content.split('\n')
   const elements = []
   let i = 0
 
