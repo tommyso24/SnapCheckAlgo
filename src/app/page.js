@@ -319,7 +319,7 @@ function LoginPage({ onLogin }) {
         </FormItem>
         <FormItem label="密码">
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="••••••••" style={inputStyle} />
-        </FormItem>
+                  </div>
 
         {error && (
           <div style={{ background: T.errorBg, border: `1px solid rgba(255,77,79,0.25)`, borderRadius: T.radiusMd, padding: '8px 12px', marginBottom: 16, color: '#ff7875', fontSize: 13 }}>
@@ -452,13 +452,16 @@ function QueryPage({ user }) {
 
       {/* Input card */}
       <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, padding: '24px 28px', boxShadow: T.shadowCard }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16 }}>
-          <FormItem label="您的公司网址（或公司详细信息）">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ color: T.textSecondary, fontSize: 13, fontWeight: 500, marginBottom: 6 }}>您的公司网址（或公司详细信息）</div>
             <textarea value={url} onChange={e => setUrl(e.target.value)}
               placeholder={'https://example.com\n\n或提供企业的详细信息，包括但不限于企业定位，企业优势，核心目标客户等'}
-              style={{ ...inputStyle, resize: 'none', height: 110, fontFamily: "'DM Mono',monospace", fontSize: 13 }} />
-          </FormItem>
-          <FormItem label="收到的询盘详细信息（或客户名片）">
+              style={{ ...inputStyle, resize: 'none', flex: 1, fontFamily: "'DM Mono',monospace", fontSize: 13 }} />
+          </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ color: T.textSecondary, fontSize: 13, fontWeight: 500, marginBottom: 6 }}>收到的询盘详细信息（或客户名片）</div>
             {/* Unified drop zone wrapping textarea + image strip */}
             <div
               onDrop={handleDrop}
@@ -625,15 +628,17 @@ function HistoryPage({ user }) {
       }
     }
 
-    // From result (especially for image-only records)
+    // From result text (image-only records or extra info)
     if (q.result && typeof q.result === 'string') {
+      const r = q.result
       if (!company) {
-        const cm = q.result.match(/(?:客户公司|公司名称)[：:][ \t]*([^，,。.（(\r\n]{2,40})/)
-        if (cm) company = cm[1].trim()
+        // Match "客户公司：PROSTYLE" / "公司名称：Beauty Nancy" / "Company: X"
+        const cm = r.match(/(?:客户公司|公司名称|客户单位|Company(?:\s+Name)?)[：:\s]+([^\n，,。《》（(【\]]{2,40})/)
+        if (cm) company = cm[1].trim().replace(/[)）】\s]+$/, '')
       }
       if (!email && !company) {
-        // Last fallback: person name
-        const nm = q.result.match(/(?:客户名称|联系人)[：:][ \t]*([^，,。.（(\r\n]{2,30})/)
+        // Person name fallback
+        const nm = r.match(/(?:客户名称|联系人|姓名|Customer|Contact)[：:\s]+([^\n，,。（(]{2,30})/)
         if (nm) company = nm[1].trim()
       }
     }
