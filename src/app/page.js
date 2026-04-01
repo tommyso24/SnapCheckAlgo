@@ -319,7 +319,7 @@ function LoginPage({ onLogin }) {
         </FormItem>
         <FormItem label="密码">
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="••••••••" style={inputStyle} />
-                  </div>
+        </FormItem>
 
         {error && (
           <div style={{ background: T.errorBg, border: `1px solid rgba(255,77,79,0.25)`, borderRadius: T.radiusMd, padding: '8px 12px', marginBottom: 16, color: '#ff7875', fontSize: 13 }}>
