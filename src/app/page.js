@@ -33,6 +33,10 @@ const T = {
   radiusLg: 12,
   // Shadow
   shadow: '0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06)',
+  // Fonts
+  fontUI:   "'DM Sans', system-ui, sans-serif",
+  fontBody: "'Lora', 'Noto Serif SC', 'Source Han Serif SC', Georgia, serif",
+  fontMono: "'DM Mono', 'Fira Code', monospace",
 }
 
 // ─── SPINNER ──────────────────────────────────────────────────────────────────
@@ -47,47 +51,127 @@ function Spinner({ size = 16, color }) {
 }
 
 // ─── MARKDOWN RENDERER ────────────────────────────────────────────────────────
+// Color palette for semantic sections
+const MD_SECTION_COLORS = [
+  { bg: 'rgba(22,119,255,0.06)',  border: 'rgba(22,119,255,0.35)',  dot: '#1677ff' },   // blue
+  { bg: 'rgba(82,196,26,0.06)',   border: 'rgba(82,196,26,0.35)',   dot: '#52c41a' },   // green
+  { bg: 'rgba(250,173,20,0.06)',  border: 'rgba(250,173,20,0.35)',  dot: '#faad14' },   // amber
+  { bg: 'rgba(114,46,209,0.06)',  border: 'rgba(114,46,209,0.35)',  dot: '#722ed1' },   // purple
+  { bg: 'rgba(19,194,194,0.06)',  border: 'rgba(19,194,194,0.35)',  dot: '#13c2c2' },   // cyan
+  { bg: 'rgba(250,84,28,0.06)',   border: 'rgba(250,84,28,0.35)',   dot: '#fa541c' },   // orange
+]
+
 function MarkdownRenderer({ content }) {
   if (!content || typeof content !== 'string') return null
   const lines = content.split('\n')
   const elements = []
   let i = 0
+  let h2Count = 0
+
   while (i < lines.length) {
     const line = lines[i]
-    if (line.startsWith('### ')) {
-      elements.push(<h3 key={i} style={{ color: T.textPrimary, fontSize: 13.5, fontWeight: 600, margin: '18px 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 3, height: 14, background: T.primary, borderRadius: 2, display: 'inline-block', flexShrink: 0 }} />{renderInline(line.slice(4))}</h3>)
+
+    // H1 — document title
+    if (line.startsWith('# ')) {
+      elements.push(
+        <h1 key={i} style={{ fontFamily: T.fontBody, color: 'rgba(255,255,255,0.95)', fontSize: 20, fontWeight: 700, margin: '0 0 18px', lineHeight: 1.4, letterSpacing: '-0.3px' }}>
+          {renderInline(line.slice(2))}
+        </h1>
+      )
+
+    // H2 — major section with colored left border card
     } else if (line.startsWith('## ')) {
-      elements.push(<h2 key={i} style={{ color: T.textPrimary, fontSize: 15, fontWeight: 600, margin: '24px 0 10px', paddingBottom: 8, borderBottom: `1px solid ${T.borderSecond}` }}>{renderInline(line.slice(3))}</h2>)
-    } else if (line.startsWith('# ')) {
-      elements.push(<h1 key={i} style={{ color: '#fff', fontSize: 17, fontWeight: 700, margin: '0 0 14px' }}>{renderInline(line.slice(2))}</h1>)
+      const col = MD_SECTION_COLORS[h2Count % MD_SECTION_COLORS.length]
+      h2Count++
+      elements.push(
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '28px 0 12px', padding: '10px 16px', background: col.bg, borderLeft: `3px solid ${col.border}`, borderRadius: '0 8px 8px 0' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: col.dot, flexShrink: 0 }} />
+          <h2 style={{ margin: 0, fontFamily: T.fontUI, color: 'rgba(255,255,255,0.92)', fontSize: 14.5, fontWeight: 600, letterSpacing: '-0.1px' }}>
+            {renderInline(line.slice(3))}
+          </h2>
+        </div>
+      )
+
+    // H3 — subsection
+    } else if (line.startsWith('### ')) {
+      elements.push(
+        <h3 key={i} style={{ fontFamily: T.fontUI, color: 'rgba(255,255,255,0.8)', fontSize: 13.5, fontWeight: 600, margin: '18px 0 7px', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 12, height: 1.5, background: 'rgba(255,255,255,0.2)', display: 'inline-block', borderRadius: 1 }} />
+          {renderInline(line.slice(4))}
+        </h3>
+      )
+
+    // HR — section divider
     } else if (line.trim() === '---') {
-      elements.push(<hr key={i} style={{ border: 'none', borderTop: `1px solid ${T.borderSecond}`, margin: '16px 0' }} />)
-    } else if (line.match(/^[\*\-] /)) {
+      elements.push(<hr key={i} style={{ border: 'none', borderTop: `1px solid ${T.borderSecond}`, margin: '20px 0' }} />)
+
+    // Bullet list
+    } else if (/^[*-] /.test(line)) {
       const items = []
-      while (i < lines.length && lines[i].match(/^[\*\-] /)) {
-        items.push(<li key={i} style={{ marginBottom: 4, lineHeight: 1.7, color: T.textSecondary }}>{renderInline(lines[i].slice(2))}</li>)
+      while (i < lines.length && /^[*-] /.test(lines[i])) {
+        items.push(
+          <li key={i} style={{ marginBottom: 6, lineHeight: 1.8, color: 'rgba(255,255,255,0.72)', fontFamily: T.fontBody, fontSize: 14 }}>
+            {renderInline(lines[i].slice(2))}
+          </li>
+        )
         i++
       }
-      elements.push(<ul key={`ul-${i}`} style={{ paddingLeft: 16, margin: '4px 0 10px' }}>{items}</ul>)
+      elements.push(
+        <ul key={`ul-${i}`} style={{ paddingLeft: 0, margin: '8px 0 12px', listStyle: 'none' }}>
+          {items.map((item, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 10, marginBottom: 5 }}>
+              <span style={{ color: T.primary, marginTop: 7, flexShrink: 0, fontSize: 8 }}>◆</span>
+              <div style={{ flex: 1 }}>{item}</div>
+            </div>
+          ))}
+        </ul>
+      )
       continue
-    } else if (line.match(/^\d+\. /)) {
+
+    // Numbered list
+    } else if (/^\d+\. /.test(line)) {
       const items = []
-      while (i < lines.length && lines[i].match(/^\d+\. /)) {
-        items.push(<li key={i} style={{ marginBottom: 4, lineHeight: 1.7, color: T.textSecondary }}>{renderInline(lines[i].replace(/^\d+\. /, ''))}</li>)
+      let num = 1
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        items.push({ num: num++, content: lines[i].replace(/^\d+\. /, ''), key: i })
         i++
       }
-      elements.push(<ol key={`ol-${i}`} style={{ paddingLeft: 18, margin: '4px 0 10px' }}>{items}</ol>)
+      elements.push(
+        <ol key={`ol-${i}`} style={{ paddingLeft: 0, margin: '8px 0 12px', listStyle: 'none' }}>
+          {items.map(item => (
+            <div key={item.key} style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+              <span style={{ width: 20, height: 20, borderRadius: '50%', background: T.primaryBg, border: `1px solid ${T.primaryBorder}`, color: T.primary, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>{item.num}</span>
+              <div style={{ flex: 1, fontFamily: T.fontBody, fontSize: 14, color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>{renderInline(item.content)}</div>
+            </div>
+          ))}
+        </ol>
+      )
       continue
+
+    // Blockquote — styled callout
     } else if (line.startsWith('> ')) {
-      elements.push(<blockquote key={i} style={{ borderLeft: `3px solid ${T.primaryBorder}`, margin: '8px 0', paddingLeft: 12, color: T.textSecondary, fontStyle: 'italic', fontSize: 13 }}>{renderInline(line.slice(2))}</blockquote>)
+      elements.push(
+        <blockquote key={i} style={{ margin: '10px 0', padding: '10px 16px', background: 'rgba(255,255,255,0.03)', borderLeft: '3px solid rgba(255,255,255,0.15)', borderRadius: '0 6px 6px 0', fontFamily: T.fontBody, color: 'rgba(255,255,255,0.55)', fontSize: 13.5, fontStyle: 'italic', lineHeight: 1.75 }}>
+          {renderInline(line.slice(2))}
+        </blockquote>
+      )
+
+    // Empty line
     } else if (line.trim() === '') {
-      elements.push(<div key={i} style={{ height: 4 }} />)
+      elements.push(<div key={i} style={{ height: 5 }} />)
+
+    // Paragraph
     } else {
-      elements.push(<p key={i} style={{ margin: '2px 0 6px', lineHeight: 1.75, color: T.textSecondary, fontSize: 13.5 }}>{renderInline(line)}</p>)
+      elements.push(
+        <p key={i} style={{ margin: '3px 0 8px', lineHeight: 1.85, color: 'rgba(255,255,255,0.72)', fontFamily: T.fontBody, fontSize: 14 }}>
+          {renderInline(line)}
+        </p>
+      )
     }
     i++
   }
-  return <div>{elements}</div>
+
+  return <div style={{ userSelect: 'text' }}>{elements}</div>
 }
 
 function renderInline(text) {
@@ -96,14 +180,34 @@ function renderInline(text) {
   let remaining = text
   let key = 0
   while (remaining.length > 0) {
+    // Bold+italic
     const bi = remaining.match(/^\*\*\*(.*?)\*\*\*/)
-    if (bi) { parts.push(<strong key={key++} style={{ fontWeight: 600, fontStyle: 'italic', color: T.textPrimary }}>{bi[1]}</strong>); remaining = remaining.slice(bi[0].length); continue }
+    if (bi) {
+      parts.push(<strong key={key++} style={{ fontWeight: 700, fontStyle: 'italic', color: 'rgba(255,255,255,0.95)', fontFamily: T.fontBody }}>{bi[1]}</strong>)
+      remaining = remaining.slice(bi[0].length); continue
+    }
+    // Bold — highlighted with subtle warm glow
     const b = remaining.match(/^\*\*(.*?)\*\*/)
-    if (b) { parts.push(<strong key={key++} style={{ fontWeight: 600, color: T.textPrimary }}>{b[1]}</strong>); remaining = remaining.slice(b[0].length); continue }
+    if (b) {
+      parts.push(
+        <strong key={key++} style={{ fontWeight: 700, color: 'rgba(255,255,255,0.95)', background: 'rgba(250,173,20,0.1)', padding: '0 3px', borderRadius: 3, fontFamily: T.fontUI }}>
+          {b[1]}
+        </strong>
+      )
+      remaining = remaining.slice(b[0].length); continue
+    }
+    // Italic
     const it = remaining.match(/^\*(.*?)\*/)
-    if (it) { parts.push(<em key={key++} style={{ fontStyle: 'italic' }}>{it[1]}</em>); remaining = remaining.slice(it[0].length); continue }
+    if (it) {
+      parts.push(<em key={key++} style={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.6)', fontFamily: T.fontBody }}>{it[1]}</em>)
+      remaining = remaining.slice(it[0].length); continue
+    }
+    // Code
     const co = remaining.match(/^`(.*?)`/)
-    if (co) { parts.push(<code key={key++} style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: '0.88em', color: '#79c0ff' }}>{co[1]}</code>); remaining = remaining.slice(co[0].length); continue }
+    if (co) {
+      parts.push(<code key={key++} style={{ background: 'rgba(22,119,255,0.12)', border: '1px solid rgba(22,119,255,0.2)', borderRadius: 4, padding: '1px 6px', fontFamily: T.fontMono, fontSize: '0.87em', color: '#79c0ff' }}>{co[1]}</code>)
+      remaining = remaining.slice(co[0].length); continue
+    }
     const next = remaining.search(/[\*`]/)
     if (next === -1) { parts.push(<span key={key++}>{remaining}</span>); break }
     parts.push(<span key={key++}>{remaining.slice(0, next)}</span>)
@@ -199,7 +303,7 @@ function LoginPage({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bgLayout, position: 'relative', overflow: 'hidden', fontFamily: "'PingFang SC','Microsoft YaHei',system-ui,sans-serif" }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bgLayout, position: 'relative', overflow: 'hidden', fontFamily: T.fontUI }}>
       {/* subtle grid bg */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${T.borderSecond} 1px,transparent 1px),linear-gradient(90deg,${T.borderSecond} 1px,transparent 1px)`, backgroundSize: '48px 48px' }} />
       <div style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,rgba(22,119,255,0.08) 0%,transparent 70%)', pointerEvents: 'none' }} />
@@ -588,7 +692,7 @@ function Layout({ user, onLogout, page, setPage, children }) {
     { id: 'settings', label: '设置', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
   ]
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: T.bgLayout, fontFamily: "'PingFang SC','Microsoft YaHei',system-ui,sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: T.bgLayout, fontFamily: T.fontUI }}>
       {/* Sider */}
       <aside style={{ width: 220, flexShrink: 0, background: T.bgSider, borderRight: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', padding: '20px 12px' }}>
         {/* Logo */}
