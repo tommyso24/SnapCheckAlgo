@@ -66,15 +66,17 @@ const MD_SECTION_COLORS = [
 
 function MarkdownRenderer({ content }) {
   if (!content || typeof content !== 'string') return null
+  try {
   const lines = content.split('\n')
   const elements = []
   let i = 0
   let h2Count = 0
+  let safetyLoopCount = 0
 
   // Base text style — matches Claude's body text
   const base = { fontFamily: T.fontBody, fontSize: 15, lineHeight: 1.8, color: T.textPrimary }
 
-  while (i < lines.length) {
+  while (i < lines.length && safetyLoopCount++ < 5000) {
     const line = lines[i]
 
     // H1
@@ -172,52 +174,52 @@ function MarkdownRenderer({ content }) {
   }
 
   return <div style={{ userSelect: 'text' }}>{elements}</div>
+  } catch (err) { return <div style={{ color: T.textTertiary, fontSize: 13, padding: '8px 0' }}>内容渲染失败</div> }
 }
 
 function renderInline(text) {
-  if (typeof text !== 'string') return text
-  const parts = []
-  let remaining = text
-  let key = 0
-  while (remaining.length > 0) {
-    // Bold+italic
-    const bi = remaining.match(/^\*\*\*(.*?)\*\*\*/)
-    if (bi) {
-      parts.push(<strong key={key++} style={{ fontWeight: 600, fontStyle: 'italic', color: T.textPrimary }}>{bi[1]}</strong>)
-      remaining = remaining.slice(bi[0].length); continue
+  if (typeof text !== 'string') return String(text ?? '')
+  try {
+    const parts = []
+    let remaining = text
+    let key = 0
+    let safety = 0
+    while (remaining.length > 0 && safety++ < 2000) {
+      const bi = remaining.match(/^\*\*\*(.*?)\*\*\*/)
+      if (bi) { parts.push(<strong key={key++} style={{ fontWeight: 600, fontStyle: 'italic', color: T.textPrimary }}>{bi[1]}</strong>); remaining = remaining.slice(bi[0].length); continue }
+      const b = remaining.match(/^\*\*(.*?)\*\*/)
+      if (b) { parts.push(<strong key={key++} style={{ fontWeight: 600, color: T.textPrimary }}>{b[1]}</strong>); remaining = remaining.slice(b[0].length); continue }
+      const it = remaining.match(/^\*(.*?)\*/)
+      if (it) { parts.push(<em key={key++} style={{ fontStyle: 'italic', color: T.textSecondary }}>{it[1]}</em>); remaining = remaining.slice(it[0].length); continue }
+      const co = remaining.match(/^`(.*?)`/)
+      if (co) { parts.push(<code key={key++} style={{ background: 'rgba(0,0,0,0.05)', border: `1px solid ${T.border}`, borderRadius: 4, padding: '1px 6px', fontFamily: T.fontMono, fontSize: '0.88em', color: T.textPrimary }}>{co[1]}</code>); remaining = remaining.slice(co[0].length); continue }
+      const next = remaining.search(/[\*`]/)
+      if (next <= 0) { parts.push(<span key={key++}>{remaining}</span>); break }
+      parts.push(<span key={key++}>{remaining.slice(0, next)}</span>)
+      remaining = remaining.slice(next)
     }
-    // Bold
-    const b = remaining.match(/^\*\*(.*?)\*\*/)
-    if (b) {
-      parts.push(<strong key={key++} style={{ fontWeight: 600, color: T.textPrimary }}>{b[1]}</strong>)
-      remaining = remaining.slice(b[0].length); continue
-    }
-    // Italic
-    const it = remaining.match(/^\*(.*?)\*/)
-    if (it) {
-      parts.push(<em key={key++} style={{ fontStyle: 'italic', color: T.textSecondary }}>{it[1]}</em>)
-      remaining = remaining.slice(it[0].length); continue
-    }
-    // Code
-    const co = remaining.match(/^`(.*?)`/)
-    if (co) {
-      parts.push(<code key={key++} style={{ background: 'rgba(0,0,0,0.05)', border: `1px solid ${T.border}`, borderRadius: 4, padding: '1px 6px', fontFamily: T.fontMono, fontSize: '0.88em', color: T.textPrimary }}>{co[1]}</code>)
-      remaining = remaining.slice(co[0].length); continue
-    }
-    const next = remaining.search(/[\*`]/)
-    if (next === -1) { parts.push(<span key={key++}>{remaining}</span>); break }
-    parts.push(<span key={key++}>{remaining.slice(0, next)}</span>)
-    remaining = remaining.slice(next)
-  }
-  return parts
+    return parts
+  } catch { return text }
 }
 
 // ─── SAFE MARKDOWN (error boundary) ──────────────────────────────────────────
 class SafeMarkdown extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false } }
   static getDerivedStateFromError() { return { hasError: true } }
+  componentDidUpdate(prevProps) {
+    if (prevProps.text !== this.props.text && this.state.hasError) {
+      this.setState({ hasError: false })
+    }
+  }
   render() {
-    if (this.state.hasError) return <div style={{ color: T.textTertiary, fontSize: 13 }}>内容加载失败</div>
+    if (this.state.hasError) {
+      return (
+        <div style={{ color: T.textTertiary, fontSize: 13, padding: '12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          此记录内容格式异常，无法显示
+        </div>
+      )
+    }
     const { text } = this.props
     if (!text || typeof text !== 'string') return <span style={{ color: T.textTertiary, fontSize: 13 }}>无内容</span>
     return <MarkdownRenderer content={text} />
