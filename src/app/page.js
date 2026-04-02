@@ -462,13 +462,7 @@ function QueryPage({ user }) {
   const score = extractScore(result)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Page header */}
-      <div>
-        <h1 style={{ color: T.textPrimary, fontSize: 22, fontWeight: 600, margin: 0 }}>外贸背景调查</h1>
-        <p style={{ color: T.textTertiary, fontSize: 13, marginTop: 4 }}>输入目标公司信息与询盘内容，AI 将进行专业背调分析</p>
-      </div>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'hidden' }}>
       {/* Input card */}
       <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, padding: '24px 28px', boxShadow: T.shadowCard }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'stretch' }}>
@@ -583,7 +577,7 @@ function QueryPage({ user }) {
 
       {/* Result card */}
       {(result || streaming) && (
-        <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, overflow: 'hidden', boxShadow: T.shadowCard }}>
+        <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, overflow: 'hidden', boxShadow: T.shadowCard, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           {/* Result header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px', borderBottom: `1px solid ${T.border}`, background: T.bgContainer }}>
             <span style={{ color: T.textSecondary, fontSize: 13, fontWeight: 500 }}>分析结果</span>
@@ -593,7 +587,7 @@ function QueryPage({ user }) {
             </div>
           </div>
           {/* Result body */}
-          <div ref={resultRef} style={{ padding: '20px 28px', maxHeight: 600, overflowY: 'auto' }}>
+          <div ref={resultRef} style={{ padding: '20px 28px', flex: 1, overflowY: 'auto' }}>
             <MarkdownRenderer content={result} />
           </div>
         </div>
@@ -702,11 +696,10 @@ function HistoryPage({ user }) {
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, height: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ color: T.textPrimary, fontSize: 22, fontWeight: 600, margin: 0 }}>查询历史</h1>
-          <p style={{ color: T.textTertiary, fontSize: 13, marginTop: 4 }}>共 {visible.length} 条记录</p>
+          <p style={{ color: T.textTertiary, fontSize: 13 }}>共 {visible.length} 条记录</p>
         </div>
         <div style={{ position: 'relative' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: T.textTertiary, pointerEvents: 'none' }}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
@@ -823,10 +816,9 @@ function SettingsPage({ user }) {
   const isAdmin = user.role === 'admin'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, height: '100%', overflowY: 'auto' }}>
       <div>
-        <h1 style={{ color: T.textPrimary, fontSize: 22, fontWeight: 600, margin: 0 }}>设置</h1>
-        <p style={{ color: T.textTertiary, fontSize: 13, marginTop: 4 }}>
+        <p style={{ color: T.textTertiary, fontSize: 13 }}>
           {isAdmin ? '配置全局 API 地址、系统 Prompt 及您自己的 API Key' : '配置您的 API Key 和模型名称'}
         </p>
       </div>
@@ -905,11 +897,11 @@ function Layout({ user, onLogout, page, setPage, children }) {
     { id: 'settings', label: '设置', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> },
   ]
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: T.bgLayout, fontFamily: T.fontUI }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: T.bgLayout, fontFamily: T.fontUI }}>
       {/* Sider */}
-      <aside style={{ width: 220, flexShrink: 0, background: T.bgSider, borderRight: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', padding: '20px 12px', boxShadow: 'inset -1px 0 0 rgba(26,19,9,0.07)' }}>
+      <aside style={{ width: 220, flexShrink: 0, background: T.bgSider, borderRight: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', padding: '20px 12px', boxShadow: 'inset -1px 0 0 rgba(26,19,9,0.07)', height: '100vh', overflow: 'hidden' }}>
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 20px', borderBottom: `1px solid ${T.borderSecond}`, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 16px', borderBottom: `1px solid ${T.borderSecond}`, marginBottom: 8 }}>
           <div style={{ width: 32, height: 32, borderRadius: T.radiusMd, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
@@ -918,6 +910,24 @@ function Layout({ user, onLogout, page, setPage, children }) {
             <div style={{ color: T.textDisabled, fontSize: 10.5 }}>mmldigi.com</div>
           </div>
         </div>
+
+        {/* Page title — shown below logo */}
+        {page === 'query' && (
+          <div style={{ padding: '12px 8px 16px', borderBottom: `1px solid ${T.borderSecond}`, marginBottom: 8 }}>
+            <div style={{ color: T.textPrimary, fontSize: 14, fontWeight: 600, marginBottom: 3 }}>外贸背景调查</div>
+            <div style={{ color: T.textTertiary, fontSize: 11.5, lineHeight: 1.5 }}>输入目标公司信息与询盘内容，AI 将进行专业背调分析</div>
+          </div>
+        )}
+        {page === 'history' && (
+          <div style={{ padding: '12px 8px 16px', borderBottom: `1px solid ${T.borderSecond}`, marginBottom: 8 }}>
+            <div style={{ color: T.textPrimary, fontSize: 14, fontWeight: 600 }}>查询历史</div>
+          </div>
+        )}
+        {page === 'settings' && (
+          <div style={{ padding: '12px 8px 16px', borderBottom: `1px solid ${T.borderSecond}`, marginBottom: 8 }}>
+            <div style={{ color: T.textPrimary, fontSize: 14, fontWeight: 600 }}>设置</div>
+          </div>
+        )}
 
         {/* Nav */}
         <nav style={{ flex: 1, paddingTop: 4 }}>
@@ -960,7 +970,7 @@ function Layout({ user, onLogout, page, setPage, children }) {
       </aside>
 
       {/* Main */}
-      <main style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', maxWidth: 1100 }}>{children}</main>
+      <main style={{ flex: 1, overflow: 'hidden', padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>{children}</main>
     </div>
   )
 }
