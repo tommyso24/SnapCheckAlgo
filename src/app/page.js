@@ -926,14 +926,52 @@ function SettingsPage({ user }) {
 
           <FormItem label="Model Name">
             {(() => {
-              const MODELS = ['claude-sonnet-4-6','gemini-3.1-pro-preview-vertex','gemini-3-pro-preview-thinking','gpt-5.4']
+              const DEFAULT_MODELS = ['claude-sonnet-4-6','gemini-3.1-pro-preview-vertex','gemini-3-pro-preview-thinking','gpt-5.4']
               const cur = form.modelName || ''
+              const customModels = (form._customModels || []).filter(m => !DEFAULT_MODELS.includes(m))
+              const allModels = [...DEFAULT_MODELS, ...customModels]
+              const isAdding = form._addingModel
               return (
-                <select value={cur} onChange={e => setForm({ ...form, modelName: e.target.value })}
-                  style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5, cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%239c8a72' strokeWidth='2' strokeLinecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 32 }}>
-                  {!MODELS.includes(cur) && cur && <option value={cur}>{cur}</option>}
-                  {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {isAdding ? (
+                    <input
+                      autoFocus
+                      placeholder="输入模型名称，回车确认"
+                      style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5, flex: 1 }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && e.target.value.trim()) {
+                          const name = e.target.value.trim()
+                          const updated = [...new Set([...(form._customModels || []), name])]
+                          setForm({ ...form, modelName: name, _customModels: updated, _addingModel: false })
+                        } else if (e.key === 'Escape') {
+                          setForm({ ...form, _addingModel: false })
+                        }
+                      }}
+                      onBlur={e => {
+                        if (e.target.value.trim()) {
+                          const name = e.target.value.trim()
+                          const updated = [...new Set([...(form._customModels || []), name])]
+                          setForm({ ...form, modelName: name, _customModels: updated, _addingModel: false })
+                        } else {
+                          setForm({ ...form, _addingModel: false })
+                        }
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <select value={cur} onChange={e => setForm({ ...form, modelName: e.target.value })}
+                        style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5, cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%239c8a72' strokeWidth='2' strokeLinecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 32, flex: 1 }}>
+                        {!allModels.includes(cur) && cur && <option value={cur}>{cur}</option>}
+                        {allModels.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <button
+                        onClick={() => setForm({ ...form, _addingModel: true })}
+                        style={{ width: 32, height: 32, borderRadius: T.radiusMd, border: `1px solid ${T.border}`, background: T.bgElevated, color: T.textSecondary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1, flexShrink: 0 }}
+                        title="添加自定义模型"
+                      >+</button>
+                    </>
+                  )}
+                </div>
               )
             })()}
           </FormItem>
