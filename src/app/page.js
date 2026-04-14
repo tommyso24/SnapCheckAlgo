@@ -402,26 +402,23 @@ function extractScore(t) {
 
 function IntelCard({ title, section, children }) {
   const status = section?.status
-  const color =
-    status === 'ok' ? '#1a7f37' :
-    status === 'failed' ? '#cf222e' :
-    status === 'skipped' ? '#6e7781' :
-    '#848d97'
-  const label =
-    status === 'ok' ? '✓ 已获取' :
-    status === 'failed' ? '✗ 失败' :
-    status === 'skipped' ? '⊘ 跳过' :
-    '… 加载中'
+  const dotColor =
+    status === 'ok' ? 'bg-stripe-success' :
+    status === 'failed' ? 'bg-stripe-ruby' :
+    status === 'skipped' ? 'bg-stripe-body' :
+    'bg-stripe-border'
+  const pulsing = !status
+  const borderColor = status === 'failed' ? 'border-stripe-ruby/40' : 'border-stripe-border'
+
   return (
-    <div style={{
-      border: '1px solid #d0d7de', borderRadius: 8, padding: 12,
-      background: '#fff', fontSize: 13,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <strong>{title}</strong>
-        <span style={{ color, fontSize: 12 }}>{label}</span>
+    <div className={`bg-white border ${borderColor} rounded-stripe-sm p-3 min-h-[88px] transition-colors hover:border-stripe-purpleLight`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${pulsing ? 'animate-pulse' : ''}`} />
+        <span className="text-caption font-normal text-stripe-navy">{title}</span>
       </div>
-      <div style={{ color: '#57606a' }}>{children}</div>
+      <div className="text-caption-sm font-light text-stripe-body leading-relaxed line-clamp-3">
+        {children}
+      </div>
     </div>
   )
 }
