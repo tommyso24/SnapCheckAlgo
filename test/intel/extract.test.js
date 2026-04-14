@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { parseExtractionJson, deriveCompanyUrlFromEmail } from '@/lib/intel/extract'
+import {
+  parseExtractionJson,
+  deriveCompanyUrlFromEmail,
+  deriveCompanyUrlFromText,
+} from '@/lib/intel/extract'
 
 describe('parseExtractionJson', () => {
   it('parses a plain JSON object', () => {
@@ -72,5 +76,65 @@ describe('deriveCompanyUrlFromEmail', () => {
     expect(deriveCompanyUrlFromEmail(null)).toBeNull()
     expect(deriveCompanyUrlFromEmail('')).toBeNull()
     expect(deriveCompanyUrlFromEmail('foo@')).toBeNull()
+  })
+})
+
+describe('deriveCompanyUrlFromText', () => {
+  it('extracts an https URL from the middle of text', () => {
+    const out = deriveCompanyUrlFromText('Hi, please visit https://abctrading.com for details.')
+    expect(out).toBe('https://abctrading.com')
+  })
+
+  it('extracts a www-prefixed domain without protocol', () => {
+    const out = deriveCompanyUrlFromText('Our site: www.xyz.co.uk/about')
+    expect(out).toBe('https://xyz.co.uk')
+  })
+
+  it('ignores plain email addresses (no http/www prefix)', () => {
+    const out = deriveCompanyUrlFromText('Email me at info@example.com')
+    expect(out).toBeNull()
+  })
+
+  it('skips known social / marketplace / search domains', () => {
+    expect(deriveCompanyUrlFromText('find me on https://linkedin.com/in/foo')).toBeNull()
+    expect(deriveCompanyUrlFromText('https://www.facebook.com/pages/foo')).toBeNull()
+    expect(deriveCompanyUrlFromText('alibaba.com listing https://www.alibaba.com/xyz')).toBeNull()
+  })
+
+  it('excludes the user-provided domain', () => {
+    const out = deriveCompanyUrlFromText(
+      'Loved your product at https://konmison.com - we are at https://thegoodbuyer.com',
+      'konmison.com'
+    )
+    expect(out).toBe('https://thegoodbuyer.com')
+  })
+
+  it('excludes the user-provided domain when passed with protocol + www', () => {
+    const out = deriveCompanyUrlFromText(
+      'yours: https://www.konmison.com theirs: https://mybuyer.io',
+      'https://www.konmison.com'
+    )
+    expect(out).toBe('https://mybuyer.io')
+  })
+
+  it('excludes the user-provided domain when a subdomain is quoted', () => {
+    const out = deriveCompanyUrlFromText(
+      'we like shop.konmison.com products, our site www.mybuyer.io',
+      'konmison.com'
+    )
+    expect(out).toBe('https://mybuyer.io')
+  })
+
+  it('returns null when no URL present', () => {
+    expect(deriveCompanyUrlFromText('just some plain text')).toBeNull()
+    expect(deriveCompanyUrlFromText('')).toBeNull()
+    expect(deriveCompanyUrlFromText(null)).toBeNull()
+  })
+
+  it('returns the first valid domain, skipping blacklisted ones along the way', () => {
+    const out = deriveCompanyUrlFromText(
+      'Follow us on https://twitter.com/foo and visit https://mycorp.com'
+    )
+    expect(out).toBe('https://mycorp.com')
   })
 })
