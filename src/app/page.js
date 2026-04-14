@@ -427,55 +427,94 @@ function IntelPanel({ intel }) {
   if (!intel) return null
   const e = intel.extracted || {}
   return (
-    <div style={{ border: '1px solid #d0d7de', borderRadius: 12, padding: 16, background: '#f6f8fa', marginBottom: 16 }}>
-      <div style={{ fontSize: 13, color: '#57606a', marginBottom: 10 }}>
-        🔍 实时情报{intel.meta?.durationMs ? `(${intel.meta.durationMs}ms)` : '(收集中…)'}
+    <div className="bg-white border border-stripe-border rounded-stripe shadow-stripe-ambient">
+      <div className="px-5 py-4 border-b border-stripe-border flex items-center justify-between">
+        <h3 className="text-subheading font-light text-stripe-navy">🔍 实时情报</h3>
+        {intel.meta?.durationMs && (
+          <span className="text-caption-sm font-mono text-stripe-body">
+            {(intel.meta.durationMs / 1000).toFixed(1)}s
+          </span>
+        )}
       </div>
-      {e && (e.companyName || e.personName || e.email) && (
-        <div style={{ fontSize: 12, color: '#24292f', marginBottom: 10 }}>
-          <b>识别实体:</b>
-          {e.companyName && <> 公司:{e.companyName}</>}
-          {e.personName && <> · 人:{e.personName}{e.personTitle ? `(${e.personTitle})` : ''}</>}
-          {e.email && <> · 邮箱:{e.email}</>}
-          {e.country && <> · 国家:{e.country}</>}
+      {(e.companyName || e.personName || e.email) && (
+        <div className="px-5 py-3 bg-stripe-purpleLight/15 border-b border-stripe-border text-caption text-stripe-label space-y-1">
+          {e.companyName && (
+            <div>
+              <b className="text-stripe-navy font-normal">公司:</b> {e.companyName}
+            </div>
+          )}
+          {e.personName && (
+            <div>
+              <b className="text-stripe-navy font-normal">联系人:</b> {e.personName}
+              {e.personTitle && ` · ${e.personTitle}`}
+            </div>
+          )}
+          {e.email && (
+            <div>
+              <b className="text-stripe-navy font-normal">邮箱:</b>{' '}
+              <span className="font-mono">{e.email}</span>
+            </div>
+          )}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+      <div className="p-4 grid grid-cols-2 gap-3">
         <IntelCard title="公司网站" section={intel.website}>
           {intel.website?.title || intel.website?.error || '—'}
         </IntelCard>
         <IntelCard title="建站时间" section={intel.wayback}>
           {intel.wayback?.firstSnapshot
-            ? `最早快照 ${intel.wayback.firstSnapshot} (约 ${intel.wayback.ageYears} 年)`
+            ? `${intel.wayback.firstSnapshot}(约 ${intel.wayback.ageYears}年)`
             : intel.wayback?.error || '无记录'}
         </IntelCard>
         <IntelCard title="LinkedIn" section={intel.linkedin}>
           {intel.linkedin?.status === 'ok'
-            ? (intel.linkedin.found ? `找到 ${intel.linkedin.topResults.length} 条` : '未找到')
+            ? intel.linkedin.found
+              ? `找到 ${intel.linkedin.topResults.length} 条`
+              : '未找到'
             : intel.linkedin?.error || '—'}
           {intel.linkedin?.topResults?.slice(0, 2).map((r, i) => (
-            <div key={i} style={{ marginTop: 4 }}>
-              <a href={r.link} target="_blank" rel="noreferrer">{r.title}</a>
+            <div key={i} className="mt-1">
+              <a
+                href={r.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-stripe-purple hover:text-stripe-purpleHover underline decoration-stripe-purpleLight underline-offset-2"
+              >
+                {r.title}
+              </a>
             </div>
           ))}
         </IntelCard>
         <IntelCard title="Facebook" section={intel.facebook}>
           {intel.facebook?.status === 'ok'
-            ? (intel.facebook.found ? `找到 ${intel.facebook.topResults.length} 条` : '未找到')
+            ? intel.facebook.found
+              ? `找到 ${intel.facebook.topResults.length} 条`
+              : '未找到'
             : intel.facebook?.error || '—'}
         </IntelCard>
-        <IntelCard title="Panjiva 海关足迹" section={intel.panjiva}>
+        <IntelCard title="Panjiva 海关" section={intel.panjiva}>
           {intel.panjiva?.status === 'ok'
-            ? (intel.panjiva.hasRecord ? `搜到 ${intel.panjiva.resultCount} 条` : '未发现')
+            ? intel.panjiva.hasRecord
+              ? `搜到 ${intel.panjiva.resultCount} 条`
+              : '未发现'
             : intel.panjiva?.error || '—'}
         </IntelCard>
-        <IntelCard title="负面 / 诈骗搜索" section={intel.negative}>
+        <IntelCard title="负面搜索" section={intel.negative}>
           {intel.negative?.status === 'ok'
-            ? (intel.negative.hitCount > 0 ? `⚠️ 发现 ${intel.negative.hitCount} 条` : '未发现')
+            ? intel.negative.hitCount > 0
+              ? `⚠️ ${intel.negative.hitCount} 条`
+              : '未发现'
             : intel.negative?.error || '—'}
           {intel.negative?.hits?.slice(0, 2).map((r, i) => (
-            <div key={i} style={{ marginTop: 4 }}>
-              <a href={r.link} target="_blank" rel="noreferrer">{r.title}</a>
+            <div key={i} className="mt-1">
+              <a
+                href={r.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-stripe-ruby hover:underline"
+              >
+                {r.title}
+              </a>
             </div>
           ))}
         </IntelCard>
