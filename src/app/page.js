@@ -101,6 +101,19 @@ function EmptyState({ icon, title, description }) {
   )
 }
 
+function AiDisclaimer() {
+  return (
+    <div className="mt-8 pt-4 border-t border-stripe-border/70 flex items-start gap-2 text-caption-sm text-stripe-body/80 leading-relaxed">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5 text-stripe-lemon">
+        <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <span>
+        AI 分析可能包含错误或遗漏。重要决策前请点击左侧情报卡中的原始链接交叉核实,不要完全依赖单次分析结果。
+      </span>
+    </div>
+  )
+}
+
 function ImageDropzone({ images, setImages, maxImages = 4 }) {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef(null)
@@ -1082,13 +1095,14 @@ function QueryPage({ user }) {
           ) : (
             <article className="max-w-none">
               <MarkdownRenderer content={result} />
+              {result && !streaming && <AiDisclaimer />}
             </article>
           )}
         </div>
 
         {result && !streaming && (
           <div className="px-6 py-3 border-t border-stripe-border bg-stripe-border/20 flex items-center justify-between text-caption text-stripe-body">
-            <span>分析完成 · 可在左侧情报面板交叉验证来源</span>
+            <span>分析完成</span>
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(result)}
@@ -1261,6 +1275,7 @@ function HistoryPage({ user }) {
                 <div className="bg-white border border-stripe-border rounded-stripe shadow-stripe-card p-6">
                   <article className="max-w-none">
                     <MarkdownRenderer content={selected.result} />
+                    <AiDisclaimer />
                   </article>
                 </div>
               </div>
