@@ -70,6 +70,37 @@ function Logo({ variant = 'dark', size = 24 }) {
   )
 }
 
+function NavItem({ icon, label, active, onClick, adminBadge }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full h-9 px-3 rounded-stripe-sm flex items-center gap-3 text-link font-normal transition-colors ${
+        active
+          ? 'bg-stripe-purpleLight/30 text-stripe-purple'
+          : 'text-stripe-label hover:bg-stripe-purpleLight/20 hover:text-stripe-navy'
+      }`}
+    >
+      <span className={active ? 'text-stripe-purple' : 'text-stripe-body'}>{icon}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {adminBadge && (
+        <span className="text-[10px] bg-stripe-brandDark text-white px-1.5 py-0.5 rounded">ADMIN</span>
+      )}
+    </button>
+  )
+}
+
+function EmptyState({ icon, title, description }) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center py-16">
+      <div className="w-12 h-12 rounded-full bg-stripe-purpleLight/30 text-stripe-purple flex items-center justify-center mb-4">
+        {icon}
+      </div>
+      <h4 className="text-subheading font-light text-stripe-navy mb-2">{title}</h4>
+      <p className="text-body font-light text-stripe-body max-w-xs">{description}</p>
+    </div>
+  )
+}
+
 const T = {
   // Accent — Claude's warm orange-brown
   primary:      '#b45309',
