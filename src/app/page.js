@@ -141,13 +141,16 @@ const T = {
 }
 
 // ─── SPINNER ──────────────────────────────────────────────────────────────────
-function Spinner({ size = 16, color }) {
-  const c = color || T.textTertiary
+function Spinner({ size = 16, color = '#533afd' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      style={{ animation: 'spin 0.8s linear infinite', flexShrink: 0 }}>
-      <circle cx="12" cy="12" r="10" stroke={c} strokeWidth="2.5" strokeOpacity="0.2" />
-      <path d="M12 2a10 10 0 0110 10" stroke={c} strokeWidth="2.5" strokeLinecap="round" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="animate-spin">
+      <circle cx="12" cy="12" r="10" stroke={color} strokeOpacity="0.2" strokeWidth="3" />
+      <path
+        d="M22 12a10 10 0 01-10 10"
+        stroke={color}
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
