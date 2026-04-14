@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildLinkedInQuery } from '@/lib/intel/searches/linkedin'
+import { buildFacebookQuery } from '@/lib/intel/searches/facebook'
 
 describe('buildLinkedInQuery', () => {
   it('uses person + company when both are present', () => {
@@ -19,5 +20,19 @@ describe('buildLinkedInQuery', () => {
 
   it('returns null when nothing to search', () => {
     expect(buildLinkedInQuery({ personName: null, companyName: null })).toBeNull()
+  })
+})
+
+describe('buildFacebookQuery', () => {
+  it('prefers company name', () => {
+    expect(buildFacebookQuery({ companyName: 'ABC Ltd', personName: 'x' }))
+      .toBe('site:facebook.com "ABC Ltd"')
+  })
+  it('falls back to person name', () => {
+    expect(buildFacebookQuery({ companyName: null, personName: 'Jane Doe' }))
+      .toBe('site:facebook.com "Jane Doe"')
+  })
+  it('returns null with neither', () => {
+    expect(buildFacebookQuery({})).toBeNull()
   })
 })
