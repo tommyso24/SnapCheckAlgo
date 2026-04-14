@@ -56,6 +56,7 @@ export async function POST(req) {
             inquiry,
             images,
             apiKey,
+            mainModel: modelName,
             globalSettings,
             onProgress: (partial) => enqueue({ type: 'intel', partial }),
           })
