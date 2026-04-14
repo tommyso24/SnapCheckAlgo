@@ -472,9 +472,38 @@ function IntelCard({ title, section, children }) {
         <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${pulsing ? 'animate-pulse' : ''}`} />
         <span className="text-caption font-normal text-stripe-navy">{title}</span>
       </div>
-      <div className="text-caption-sm font-light text-stripe-body leading-relaxed line-clamp-3">
+      <div className="text-caption-sm font-light text-stripe-body leading-relaxed">
         {children}
       </div>
+    </div>
+  )
+}
+
+function IntelQueryLine({ label = '查询', value }) {
+  if (!value) return null
+  return (
+    <div className="text-[11px] font-mono text-stripe-body/80 mb-1.5 break-all">
+      <span className="text-stripe-body/60">{label}:</span> {value}
+    </div>
+  )
+}
+
+function IntelResultItem({ index, result, linkColor = 'text-stripe-purple' }) {
+  const hover = linkColor === 'text-stripe-ruby' ? 'hover:text-stripe-ruby/80' : 'hover:text-stripe-purpleHover'
+  return (
+    <div className="mt-2 text-[11px] leading-relaxed">
+      <a
+        href={result.link}
+        target="_blank"
+        rel="noreferrer"
+        className={`${linkColor} ${hover} hover:underline font-normal block truncate`}
+        title={result.title}
+      >
+        {index + 1}. {result.title || '(无标题)'}
+      </a>
+      {result.snippet && (
+        <div className="text-stripe-body/80 mt-0.5 line-clamp-2">{result.snippet}</div>
+      )}
     </div>
   )
 }
@@ -492,11 +521,19 @@ function IntelPanel({ intel }) {
           </span>
         )}
       </div>
-      {(e.companyName || e.personName || e.email) && (
+      {(e.companyName || e.companyUrl || e.personName || e.email) && (
         <div className="px-5 py-3 bg-stripe-purpleLight/15 border-b border-stripe-border text-caption text-stripe-label space-y-1">
           {e.companyName && (
             <div>
               <b className="text-stripe-navy font-normal">公司:</b> {e.companyName}
+            </div>
+          )}
+          {e.companyUrl && (
+            <div>
+              <b className="text-stripe-navy font-normal">网址:</b>{' '}
+              <a href={e.companyUrl} target="_blank" rel="noreferrer" className="font-mono text-stripe-purple hover:underline break-all">
+                {e.companyUrl}
+              </a>
             </div>
           )}
           {e.personName && (
@@ -514,65 +551,87 @@ function IntelPanel({ intel }) {
         </div>
       )}
       <div className="p-4 grid grid-cols-2 gap-3">
-        <IntelCard title="公司网站" section={intel.website}>
-          {intel.website?.title || intel.website?.error || '—'}
+        <IntelCard title="发件方公司网站" section={intel.website}>
+          {intel.website?.status === 'ok' ? (
+            <>
+              {intel.website.url && <IntelQueryLine label="URL" value={intel.website.url} />}
+              <div className="font-normal text-stripe-navy line-clamp-2">{intel.website.title || '(无标题)'}</div>
+              {intel.website.excerpt && (
+                <div className="mt-1 line-clamp-3">{intel.website.excerpt}</div>
+              )}
+            </>
+          ) : (
+            intel.website?.error || '—'
+          )}
         </IntelCard>
+
         <IntelCard title="建站时间" section={intel.wayback}>
-          {intel.wayback?.firstSnapshot
-            ? `${intel.wayback.firstSnapshot}(约 ${intel.wayback.ageYears}年)`
-            : intel.wayback?.error || '无记录'}
+          {intel.wayback?.status === 'ok' ? (
+            intel.wayback.firstSnapshot ? (
+              <>
+                <div>最早快照:<span className="font-mono text-stripe-navy">{intel.wayback.firstSnapshot}</span></div>
+                <div className="mt-0.5">建站约 <span className="font-mono text-stripe-navy">{intel.wayback.ageYears}</span> 年{intel.wayback.ageYears != null && intel.wayback.ageYears < 2 && ' ⚠️'}</div>
+              </>
+            ) : '无快照记录'
+          ) : (
+            intel.wayback?.error || '—'
+          )}
         </IntelCard>
+
         <IntelCard title="LinkedIn" section={intel.linkedin}>
-          {intel.linkedin?.status === 'ok'
-            ? intel.linkedin.found
-              ? `找到 ${intel.linkedin.topResults.length} 条`
-              : '未找到'
-            : intel.linkedin?.error || '—'}
-          {intel.linkedin?.topResults?.slice(0, 2).map((r, i) => (
-            <div key={i} className="mt-1">
-              <a
-                href={r.link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-stripe-purple hover:text-stripe-purpleHover underline decoration-stripe-purpleLight underline-offset-2"
-              >
-                {r.title}
-              </a>
-            </div>
-          ))}
+          {intel.linkedin?.status === 'ok' ? (
+            <>
+              <IntelQueryLine value={intel.linkedin.query} />
+              <div>{intel.linkedin.found ? `✓ 找到 ${intel.linkedin.topResults.length} 条` : '✗ 未找到'}</div>
+              {intel.linkedin.topResults?.map((r, i) => (
+                <IntelResultItem key={i} index={i} result={r} />
+              ))}
+            </>
+          ) : (
+            intel.linkedin?.error || '—'
+          )}
         </IntelCard>
+
         <IntelCard title="Facebook" section={intel.facebook}>
-          {intel.facebook?.status === 'ok'
-            ? intel.facebook.found
-              ? `找到 ${intel.facebook.topResults.length} 条`
-              : '未找到'
-            : intel.facebook?.error || '—'}
+          {intel.facebook?.status === 'ok' ? (
+            <>
+              <IntelQueryLine value={intel.facebook.query} />
+              <div>{intel.facebook.found ? `✓ 找到 ${intel.facebook.topResults.length} 条` : '✗ 未找到'}</div>
+              {intel.facebook.topResults?.map((r, i) => (
+                <IntelResultItem key={i} index={i} result={r} />
+              ))}
+            </>
+          ) : (
+            intel.facebook?.error || '—'
+          )}
         </IntelCard>
+
         <IntelCard title="Panjiva 海关" section={intel.panjiva}>
-          {intel.panjiva?.status === 'ok'
-            ? intel.panjiva.hasRecord
-              ? `搜到 ${intel.panjiva.resultCount} 条`
-              : '未发现'
-            : intel.panjiva?.error || '—'}
+          {intel.panjiva?.status === 'ok' ? (
+            <>
+              <IntelQueryLine value={intel.panjiva.query} />
+              <div>{intel.panjiva.hasRecord ? `✓ 搜到 ${intel.panjiva.resultCount} 条` : '✗ 未发现'}</div>
+              {intel.panjiva.topResults?.map((r, i) => (
+                <IntelResultItem key={i} index={i} result={r} />
+              ))}
+            </>
+          ) : (
+            intel.panjiva?.error || '—'
+          )}
         </IntelCard>
+
         <IntelCard title="负面搜索" section={intel.negative}>
-          {intel.negative?.status === 'ok'
-            ? intel.negative.hitCount > 0
-              ? `⚠️ ${intel.negative.hitCount} 条`
-              : '未发现'
-            : intel.negative?.error || '—'}
-          {intel.negative?.hits?.slice(0, 2).map((r, i) => (
-            <div key={i} className="mt-1">
-              <a
-                href={r.link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-stripe-ruby hover:underline"
-              >
-                {r.title}
-              </a>
-            </div>
-          ))}
+          {intel.negative?.status === 'ok' ? (
+            <>
+              <IntelQueryLine value={intel.negative.query} />
+              <div>{intel.negative.hitCount > 0 ? `⚠️ 发现 ${intel.negative.hitCount} 条` : '✓ 未发现负面'}</div>
+              {intel.negative.hits?.map((r, i) => (
+                <IntelResultItem key={i} index={i} result={r} linkColor="text-stripe-ruby" />
+              ))}
+            </>
+          ) : (
+            intel.negative?.error || '—'
+          )}
         </IntelCard>
       </div>
     </div>
