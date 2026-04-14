@@ -1019,19 +1019,52 @@ function HistoryPage({ user }) {
 
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 function SettingsPage({ user }) {
-  const [form, setForm] = useState({ baseUrl: '', systemPrompt: '', apiKey: '', modelName: 'gemini-3.1-pro-preview-vertex' })
+  const [form, setForm] = useState({
+    baseUrl: '',
+    systemPrompt: '',
+    fallbackSystemPrompt: '',
+    serpApiKey: '',
+    extractionModel: 'gemini-2.5-flash',
+    extractionPrompt: '',
+    apiKey: '',
+    modelName: 'gemini-3.1-pro-preview-vertex',
+  })
+  const [serpUsage, setSerpUsage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showKey, setShowKey] = useState(false)
 
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(d => { setForm(f => ({ ...f, ...d })); setLoading(false) })
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      setForm(f => ({
+        ...f,
+        baseUrl: d.baseUrl ?? '',
+        systemPrompt: d.systemPrompt ?? '',
+        fallbackSystemPrompt: d.fallbackSystemPrompt ?? '',
+        serpApiKey: d.serpApiKey ?? '',
+        extractionModel: d.extractionModel ?? 'gemini-2.5-flash',
+        extractionPrompt: d.extractionPrompt ?? '',
+        apiKey: d.apiKey ?? '',
+        modelName: d.modelName ?? f.modelName,
+      }))
+      if (d.serpUsage) setSerpUsage(d.serpUsage)
+      setLoading(false)
+    })
   }, [])
 
   const save = async () => {
     setSaving(true)
-    await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      baseUrl: form.baseUrl,
+      systemPrompt: form.systemPrompt,
+      fallbackSystemPrompt: form.fallbackSystemPrompt,
+      serpApiKey: form.serpApiKey,
+      extractionModel: form.extractionModel,
+      extractionPrompt: form.extractionPrompt,
+      apiKey: form.apiKey,
+      modelName: form.modelName,
+    }) })
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
   }
 
@@ -1141,6 +1174,52 @@ function SettingsPage({ user }) {
               <textarea value={form.systemPrompt || ''} onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
                 rows={14} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.7, fontSize: 13 }} />
             </FormItem>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 12, color: T.textSecondary }}>SerpAPI Key(仅管理员)</label>
+              <input
+                type="password"
+                value={form.serpApiKey || ''}
+                onChange={e => setForm({ ...form, serpApiKey: e.target.value })}
+                placeholder="sk-serp-..."
+                style={{ width: '100%', padding: 8, marginTop: 4 }}
+              />
+              {serpUsage && (
+                <div style={{ fontSize: 11, color: T.textTertiary, marginTop: 4 }}>
+                  本月已调用 {serpUsage.count} 次 ({serpUsage.month})
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 12, color: T.textSecondary }}>结构化抽取模型</label>
+              <input
+                value={form.extractionModel || ''}
+                onChange={e => setForm({ ...form, extractionModel: e.target.value })}
+                placeholder="gemini-2.5-flash"
+                style={{ width: '100%', padding: 8, marginTop: 4 }}
+              />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 12, color: T.textSecondary }}>抽取 Prompt</label>
+              <textarea
+                value={form.extractionPrompt || ''}
+                onChange={e => setForm({ ...form, extractionPrompt: e.target.value })}
+                rows={6}
+                style={{ width: '100%', padding: 8, marginTop: 4, fontFamily: T.fontMono }}
+              />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={{ fontSize: 12, color: T.textSecondary }}>降级 System Prompt(用户关闭检索或情报失败时使用)</label>
+              <textarea
+                value={form.fallbackSystemPrompt || ''}
+                onChange={e => setForm({ ...form, fallbackSystemPrompt: e.target.value })}
+                rows={6}
+                style={{ width: '100%', padding: 8, marginTop: 4, fontFamily: T.fontMono }}
+              />
+            </div>
           </div>
         )}
       </div>
