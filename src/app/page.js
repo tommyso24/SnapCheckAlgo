@@ -485,20 +485,18 @@ function IntelPanel({ intel }) {
 }
 
 function ScoreBadge({ score, size = 'md' }) {
-  const cfg = score === null
-    ? { bg: 'rgba(255,255,255,0.06)', color: T.textTertiary, border: T.border, label: '—' }
-    : score >= 80
-    ? { bg: T.successBg, color: T.success, border: 'rgba(82,196,26,0.3)', label: score }
-    : score >= 60
-    ? { bg: T.warningBg, color: T.warning, border: 'rgba(250,173,20,0.3)', label: score }
-    : { bg: T.errorBg, color: T.error, border: 'rgba(255,77,79,0.3)', label: score }
-
-  const pad = size === 'lg' ? '4px 14px' : '2px 10px'
-  const fs = size === 'lg' ? 14 : 12
+  const variants = {
+    high:    { bg: 'bg-stripe-ruby/15',    text: 'text-stripe-ruby',        border: 'border-stripe-ruby/40',        label: '高风险', dot: 'bg-stripe-ruby' },
+    medium:  { bg: 'bg-stripe-lemon/15',   text: 'text-stripe-lemon',       border: 'border-stripe-lemon/40',       label: '中风险', dot: 'bg-stripe-lemon' },
+    low:     { bg: 'bg-stripe-success/15', text: 'text-stripe-successText', border: 'border-stripe-success/40',     label: '低风险', dot: 'bg-stripe-success' },
+    unknown: { bg: 'bg-stripe-border',     text: 'text-stripe-body',        border: 'border-stripe-border',         label: '待定',   dot: 'bg-stripe-body' },
+  }
+  const v = variants[score] || variants.unknown
+  const sizeCls = size === 'sm' ? 'text-caption-sm px-2 py-0.5' : 'text-caption px-3 py-1'
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: pad, borderRadius: 100, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, fontSize: fs, fontWeight: 700, letterSpacing: '0.01em', flexShrink: 0 }}>
-      {cfg.label}
-      {score !== null && <span style={{ fontSize: fs - 3, fontWeight: 400, opacity: 0.65 }}>/100</span>}
+    <span className={`inline-flex items-center gap-1.5 border rounded-stripe-sm ${v.bg} ${v.text} ${v.border} ${sizeCls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />
+      {v.label}
     </span>
   )
 }
