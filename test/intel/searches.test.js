@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildLinkedInQuery } from '@/lib/intel/searches/linkedin'
 import { buildFacebookQuery } from '@/lib/intel/searches/facebook'
+import { buildPanjivaQuery } from '@/lib/intel/searches/panjiva'
 
 describe('buildLinkedInQuery', () => {
   it('uses person + company when both are present', () => {
@@ -34,5 +35,15 @@ describe('buildFacebookQuery', () => {
   })
   it('returns null with neither', () => {
     expect(buildFacebookQuery({})).toBeNull()
+  })
+})
+
+describe('buildPanjivaQuery', () => {
+  it('requires company name', () => {
+    expect(buildPanjivaQuery({ companyName: 'ABC Ltd' }))
+      .toBe('site:panjiva.com "ABC Ltd"')
+  })
+  it('returns null without company name', () => {
+    expect(buildPanjivaQuery({ personName: 'John' })).toBeNull()
   })
 })
