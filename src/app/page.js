@@ -535,52 +535,121 @@ function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPwd, setShowPwd] = useState(false)
 
-  const handleLogin = async () => {
-    if (!email || !password) { setError('请填写邮箱和密码'); return }
-    setLoading(true); setError('')
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
     try {
-      const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || `登录失败 (${res.status})`)
+      }
       const data = await res.json()
-      if (!res.ok) { setError(data.error || '登录失败'); return }
       onLogin(data)
-    } catch { setError('网络错误，请重试') }
-    finally { setLoading(false) }
+    } catch (err) {
+      setError(err.message || '登录失败')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bgLayout, position: 'relative', overflow: 'hidden', fontFamily: T.fontUI }}>
-      <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${T.borderSecond} 1px,transparent 1px),linear-gradient(90deg,${T.borderSecond} 1px,transparent 1px)`, backgroundSize: '48px 48px' }} />
-
-      <div style={{ position: 'relative', width: 400, background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, padding: '40px 36px', boxShadow: T.shadowCard }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 48, height: 48, borderRadius: T.radiusMd, background: T.primary, marginBottom: 16 }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </div>
-          <div style={{ color: T.textPrimary, fontSize: 20, fontWeight: 600, letterSpacing: '-0.3px' }}>外贸背景调查</div>
-          <div style={{ color: T.textTertiary, fontSize: 12, marginTop: 4 }}>Trade Background Intelligence</div>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-white">
+      {/* LEFT — dark brand */}
+      <aside className="lg:w-1/2 bg-stripe-brandDark text-white relative overflow-hidden flex flex-col">
+        {/* Mobile mini hero */}
+        <div className="lg:hidden h-[180px] px-6 py-8 flex flex-col justify-center">
+          <Logo variant="light" />
+          <h1 className="mt-4 text-heading font-light text-white leading-tight">
+            外贸背调 · 证据驱动
+          </h1>
         </div>
 
-        <FormItem label="邮箱">
-          <input value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="your@email.com" style={inputStyle} />
-        </FormItem>
-        <FormItem label="密码">
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="••••••••" style={inputStyle} />
-        </FormItem>
-
-        {error && (
-          <div style={{ background: T.errorBg, border: `1px solid rgba(255,77,79,0.25)`, borderRadius: T.radiusMd, padding: '8px 12px', marginBottom: 16, color: '#ff7875', fontSize: 13 }}>
-            {error}
+        {/* Desktop full hero */}
+        <div className="hidden lg:flex flex-col h-full px-16 py-20">
+          <Logo variant="light" />
+          <div className="flex-1 flex flex-col justify-center max-w-lg">
+            <h1 className="text-display font-light tracking-[-1.4px] leading-[1.03] text-white">
+              外贸背调
+              <br />
+              证据驱动的风险分析
+            </h1>
+            <p className="mt-8 text-body-lg font-light text-white/70 leading-relaxed">
+              LinkedIn · Panjiva · 建站时间 · 公司网站 · 负面舆情 —— 所有判断都可追溯到原始来源。
+            </p>
           </div>
-        )}
+          <div className="text-caption-sm text-white/40">© 2026 trade-check</div>
+        </div>
 
-        <button onClick={handleLogin} disabled={loading} style={{ width: '100%', padding: '10px', border: 'none', borderRadius: T.radiusMd, cursor: loading ? 'wait' : 'pointer', background: loading ? 'rgba(180,83,9,0.5)' : T.primary, color: '#fff', fontSize: 15, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4, letterSpacing: '0.01em' }}>
-          {loading ? <><Spinner color="#fff" />登录中...</> : '登录'}
-        </button>
+        {/* Gradient decoration */}
+        <div
+          className="hidden lg:block absolute -bottom-20 -right-20 w-96 h-96 rounded-full bg-gradient-to-br from-stripe-ruby to-stripe-magenta opacity-40 blur-3xl pointer-events-none"
+          aria-hidden
+        />
+      </aside>
 
-        <div style={{ textAlign: 'center', marginTop: 20, color: T.textTertiary, fontSize: 12 }}>© 2025 mmldigi.com</div>
-      </div>
+      {/* RIGHT — form */}
+      <main className="flex-1 flex items-center justify-center px-6 py-12">
+        <form onSubmit={handleSubmit} className="w-full max-w-sm">
+          <h2 className="text-heading font-light tracking-[-0.64px] text-stripe-navy">欢迎回来</h2>
+          <p className="mt-2 text-body font-light text-stripe-body">请使用管理员分配的账号登录</p>
+
+          <div className="mt-10">
+            <label className="text-caption text-stripe-label block mb-2">邮箱</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="w-full h-10 px-3 text-body font-light bg-white border border-stripe-border rounded-stripe-sm focus:outline-none focus:border-stripe-purple focus:ring-2 focus:ring-stripe-purple/20 transition"
+            />
+          </div>
+
+          <div className="mt-5 relative">
+            <label className="text-caption text-stripe-label block mb-2">密码</label>
+            <input
+              type={showPwd ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              className="w-full h-10 px-3 pr-10 text-body font-light bg-white border border-stripe-border rounded-stripe-sm focus:outline-none focus:border-stripe-purple focus:ring-2 focus:ring-stripe-purple/20 transition"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPwd((v) => !v)}
+              className="absolute right-3 top-[34px] text-stripe-body hover:text-stripe-purple"
+              aria-label={showPwd ? '隐藏密码' : '显示密码'}
+            >
+              <EyeIcon open={showPwd} />
+            </button>
+          </div>
+
+          {error && (
+            <div className="mt-4 text-caption text-stripe-ruby animate-shake">{error}</div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-8 w-full h-11 bg-stripe-purple hover:bg-stripe-purpleHover text-white text-btn rounded-stripe-sm transition-colors disabled:opacity-50 flex items-center justify-center"
+          >
+            {loading ? <Spinner size={16} color="#ffffff" /> : '登录'}
+          </button>
+
+          <div className="mt-6 text-center">
+            <span className="text-link text-stripe-body">忘记密码?请联系管理员</span>
+          </div>
+        </form>
+      </main>
     </div>
   )
 }
