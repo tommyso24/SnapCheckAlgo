@@ -3,6 +3,7 @@ import { buildLinkedInQuery } from '@/lib/intel/searches/linkedin'
 import { buildFacebookQuery } from '@/lib/intel/searches/facebook'
 import { buildPanjivaQuery } from '@/lib/intel/searches/panjiva'
 import { buildNegativeQuery } from '@/lib/intel/searches/negative'
+import { buildGeneralQuery } from '@/lib/intel/searches/general'
 
 describe('buildLinkedInQuery', () => {
   it('uses person + company when both are present', () => {
@@ -64,5 +65,14 @@ describe('buildNegativeQuery', () => {
   })
   it('returns null with no identifier', () => {
     expect(buildNegativeQuery({})).toBeNull()
+  })
+})
+
+describe('buildGeneralQuery', () => {
+  it('uses company name when present', () => {
+    expect(buildGeneralQuery({ companyName: 'ABC Ltd' })).toBe('"ABC Ltd"')
+  })
+  it('returns null without company name', () => {
+    expect(buildGeneralQuery({ personName: 'X' })).toBeNull()
   })
 })
