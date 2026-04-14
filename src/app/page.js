@@ -1109,6 +1109,41 @@ function isValidRecord(q) {
   return true
 }
 
+function HistoryCard({ query, active, onClick }) {
+  const score = extractScore(query.result)
+  const hasIntel = query.intelEnabled === 'true' || query.intelEnabled === true
+  const when = query.createdAt
+    ? new Date(query.createdAt).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : ''
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full p-4 rounded-stripe border text-left transition-colors ${
+        active
+          ? 'bg-stripe-purpleLight/20 border-stripe-purple'
+          : 'bg-white border-stripe-border hover:border-stripe-purpleLight'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <span className="text-caption font-mono text-stripe-label truncate flex-1">
+          {query.url || '(无URL)'}
+        </span>
+        {score && <ScoreBadge score={score} size="sm" />}
+      </div>
+      <div className="flex items-center justify-between text-caption-sm text-stripe-body">
+        <span>{when}</span>
+        {hasIntel && <span className="text-stripe-purple">🔍 含情报</span>}
+      </div>
+    </button>
+  )
+}
+
 function HistoryPage({ user }) {
   const [queries, setQueries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1127,171 +1162,105 @@ function HistoryPage({ user }) {
     })
   }, [])
 
-  // Safe expand: catch any error and mark that record as broken
-  const handleExpand = (i, q) => {
-    if (expandError[i]) return // already known broken, don't expand
-    if (!isValidRecord(q)) {
-      // Mark as broken silently
-      setExpandError(prev => ({ ...prev, [i]: true }))
-      return
-    }
-    setSelected(selected === i ? null : i)
-  }
-
-  // Returns { email, company } — both optional
-  const clientInfo = (q) => {
-    let email = null, company = null
-
-    // From inquiry text
-    if (q.inquiry && typeof q.inquiry === 'string') {
-      const lines = q.inquiry.split('\n')
-      for (const line of lines) {
-        if (!email && line.includes('@') && line.includes('.')) {
-          const parts = line.trim().split(/\s+/)
-          for (const p of parts) {
-            if (p.includes('@')) { email = p.replace(/[,;]+$/, ''); break }
-          }
-        }
-        if (!company && (line.includes('www.') || /[a-z0-9-]+\.(com|net|org|io|co)/i.test(line))) {
-          const m = line.match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.(?:com|net|org|io|co)[a-z.]*)/i)
-          if (m) company = m[0]
-        }
-      }
-    }
-
-    // From result text (image-only records or extra info)
-    if (q.result && typeof q.result === 'string') {
-      const r = q.result
-      if (!company) {
-        // Match "客户公司：PROSTYLE" / "公司名称：Beauty Nancy" / "Company: X"
-        const cm = r.match(/(?:客户公司|公司名称|客户单位|Company(?:\s+Name)?)[：:\s]+([^\n，,。《》（(【\]]{2,40})/)
-        if (cm) company = cm[1].trim().replace(/[)）】\s]+$/, '')
-      }
-      if (!email && !company) {
-        // Person name fallback
-        const nm = r.match(/(?:客户名称|联系人|姓名|Customer|Contact)[：:\s]+([^\n，,。（(]{2,30})/)
-        if (nm) company = nm[1].trim()
-      }
-    }
-
-    return { email, company }
-  }
-
-  // Keep clientHint for backward compat (used in visible row)
-  const clientHint = (q) => {
-    const { email, company } = clientInfo(q)
-    return email || company || null
-  }
-
-  const visible = queries.filter(q => !search ||
+  const visible = queries.filter(q =>
+    !search ||
     q.url?.toLowerCase().includes(search.toLowerCase()) ||
     q.inquiry?.toLowerCase().includes(search.toLowerCase()) ||
     q.userEmail?.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, height: '100%', overflowY: 'auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <p style={{ color: T.textTertiary, fontSize: 13 }}>共 {visible.length} 条记录</p>
-        </div>
-        <div style={{ position: 'relative' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: T.textTertiary, pointerEvents: 'none' }}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索..."
-            style={{ ...inputStyle, width: 220, paddingLeft: 32, fontSize: 13 }} />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, overflow: 'hidden', boxShadow: T.shadowCard }}>
-        {/* Table header */}
-        <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 100px', gap: 0, borderBottom: `1px solid ${T.border}`, background: T.bgContainer, padding: '10px 20px' }}>
-          {['评分', '公司网址', '客户信息', '时间'].map(h => (
-            <div key={h} style={{ color: T.textTertiary, fontSize: 12, fontWeight: 500 }}>{h}</div>
-          ))}
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* LEFT: list */}
+      <div className="w-full lg:w-[380px] lg:shrink-0 space-y-2">
+        <div className="relative mb-3">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-stripe-body" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索 URL 或询盘内容..."
+            className="w-full h-10 pl-10 pr-3 text-body font-light bg-white border border-stripe-border rounded-stripe-sm focus:outline-none focus:border-stripe-purple focus:ring-2 focus:ring-stripe-purple/20 transition"
+          />
         </div>
 
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spinner size={24} color={T.textTertiary} /></div>
+          <div className="py-8 flex justify-center">
+            <Spinner />
+          </div>
         ) : visible.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, color: T.textTertiary, fontSize: 13 }}>暂无查询记录</div>
+          <div className="py-12 text-center text-caption text-stripe-body">暂无历史记录</div>
         ) : (
-          visible.map((q, i) => {
-            const score = extractScore(q.result)
-            const isOpen = selected === i
+          <div className="space-y-2 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-2">
+            {visible.map((q, i) => (
+              <HistoryCard
+                key={q.createdAt || i}
+                query={q}
+                active={selected === q}
+                onClick={() => setSelected(selected === q ? null : q)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT: detail */}
+      <div className="flex-1 min-w-0">
+        {!selected ? (
+          <div className="h-full min-h-[320px] bg-white border border-stripe-border rounded-stripe">
+            <EmptyState
+              icon={<ClockIcon size={20} />}
+              title="选择一条历史记录"
+              description="左侧列表中点击任意条目查看完整分析"
+            />
+          </div>
+        ) : (
+          (() => {
+            const parsedIntel = (() => {
+              if (!selected?.intel) return null
+              if (typeof selected.intel === 'string') {
+                try {
+                  return JSON.parse(selected.intel)
+                } catch {
+                  return null
+                }
+              }
+              return selected.intel
+            })()
+            const historyIntelEnabled =
+              parsedIntel &&
+              selected?.intelEnabled !== 'false' &&
+              selected?.intelEnabled !== false
             return (
-              <div key={q.createdAt || i}>
-                {/* Table row */}
-                <div onClick={() => handleExpand(i, q)}
-                  style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 100px', gap: 0, padding: '13px 20px', cursor: expandError[i] ? 'default' : 'pointer', borderBottom: `1px solid ${T.borderSecond}`, background: isOpen ? T.primaryBg : 'transparent', transition: 'background 0.15s', opacity: expandError[i] ? 0.4 : 1 }}
-                  onMouseEnter={e => { if (!isOpen && !expandError[i]) e.currentTarget.style.background = 'rgba(0,0,0,0.02)' }}
-                  onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = 'transparent' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <ScoreBadge score={score} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-                    <span style={{ color: q.url ? '#79c0ff' : T.textTertiary, fontSize: 13, fontFamily: q.url ? "'DM Mono',monospace" : 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 16 }}>
-                      {q.url || '—'}
+              <div className="space-y-4">
+                <div className="bg-white border border-stripe-border rounded-stripe p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-caption-sm text-stripe-body">
+                      {new Date(selected.createdAt).toLocaleString('zh-CN')}
                     </span>
+                    {extractScore(selected.result) && (
+                      <ScoreBadge score={extractScore(selected.result)} />
+                    )}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, gap: 2 }}>
-                    {(() => {
-                      const { email, company } = clientInfo(q)
-                      return <>
-                        {company && <span style={{ color: T.textSecondary, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 16 }}>{company}</span>}
-                        {email && <span style={{ color: T.textTertiary, fontSize: 11.5, fontFamily: "'DM Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 16 }}>{email}</span>}
-                        {!company && !email && <span style={{ color: T.textDisabled }}>—</span>}
-                      </>
-                    })()}
+                  <div className="text-caption font-mono text-stripe-label break-all">
+                    {selected.url || '(无URL)'}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-                    <span style={{ color: T.textTertiary, fontSize: 11.5 }}>
-                      {new Date(q.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {user.role === 'admin' && <span style={{ color: T.textDisabled, fontSize: 10.5 }}>{q.userEmail}</span>}
-                  </div>
+                  {selected.inquiry && (
+                    <div className="mt-3 text-caption text-stripe-body line-clamp-2">
+                      {selected.inquiry}
+                    </div>
+                  )}
                 </div>
 
-                {/* Expanded row */}
-                {isOpen && (
-                  <div onClick={e => e.stopPropagation()} style={{ borderBottom: `1px solid ${T.border}`, background: T.bgContainer, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                      {q.url && (
-                        <div>
-                          <div style={{ color: T.textTertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>公司网址 / 信息</div>
-                          <div style={{ color: '#79c0ff', fontSize: 12.5, fontFamily: 'monospace', background: T.bgContainer, borderRadius: T.radiusMd, padding: '8px 12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{q.url}</div>
-                        </div>
-                      )}
-                      {q.inquiry && (
-                        <div>
-                          <div style={{ color: T.textTertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>询盘信息</div>
-                          <div style={{ color: T.textSecondary, fontSize: 12.5, background: T.bgContainer, borderRadius: T.radiusMd, padding: '8px 12px', maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>{q.inquiry}</div>
-                        </div>
-                      )}
-                    </div>
-                    {(() => {
-                      const parsedIntel = (() => {
-                        if (!q.intel) return null
-                        if (typeof q.intel === 'string') {
-                          try { return JSON.parse(q.intel) } catch { return null }
-                        }
-                        return q.intel
-                      })()
-                      const historyIntelEnabled = parsedIntel && q.intelEnabled !== 'false' && q.intelEnabled !== false
-                      return historyIntelEnabled && parsedIntel ? <IntelPanel intel={parsedIntel} /> : null
-                    })()}
-                    <div>
-                      <div style={{ color: T.textTertiary, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>分析结果</div>
-                      <div style={{ background: T.bgContainer, borderRadius: T.radiusMd, padding: '16px 20px', maxHeight: 400, overflowY: 'auto' }}>
-                        <SafeMarkdown text={q.result} />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {historyIntelEnabled && <IntelPanel intel={parsedIntel} />}
+
+                <div className="bg-white border border-stripe-border rounded-stripe shadow-stripe-card p-6">
+                  <article className="max-w-none">
+                    <MarkdownRenderer content={selected.result} />
+                  </article>
+                </div>
               </div>
             )
-          })
+          })()
         )}
       </div>
     </div>
