@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseExtractionJson } from '@/lib/intel/extract'
+import { parseExtractionJson, deriveCompanyUrlFromEmail } from '@/lib/intel/extract'
 
 describe('parseExtractionJson', () => {
   it('parses a plain JSON object', () => {
@@ -34,5 +34,43 @@ describe('parseExtractionJson', () => {
   it('extracts companyUrl when present', () => {
     const out = parseExtractionJson('{"companyName":"ABC","companyUrl":"https://abc.com"}')
     expect(out.companyUrl).toBe('https://abc.com')
+  })
+})
+
+describe('deriveCompanyUrlFromEmail', () => {
+  it('derives https URL from a corporate domain', () => {
+    expect(deriveCompanyUrlFromEmail('john@abctrading.com')).toBe('https://abctrading.com')
+  })
+
+  it('normalizes uppercase to lowercase', () => {
+    expect(deriveCompanyUrlFromEmail('JOHN@ABCTRADING.COM')).toBe('https://abctrading.com')
+  })
+
+  it('handles subdomains', () => {
+    expect(deriveCompanyUrlFromEmail('buyer@mail.factory.co.uk')).toBe('https://mail.factory.co.uk')
+  })
+
+  it('returns null for Gmail', () => {
+    expect(deriveCompanyUrlFromEmail('foo@gmail.com')).toBeNull()
+  })
+
+  it('returns null for Outlook / Yahoo / AOL', () => {
+    expect(deriveCompanyUrlFromEmail('a@outlook.com')).toBeNull()
+    expect(deriveCompanyUrlFromEmail('a@yahoo.com')).toBeNull()
+    expect(deriveCompanyUrlFromEmail('a@aol.com')).toBeNull()
+  })
+
+  it('returns null for common Chinese free providers', () => {
+    expect(deriveCompanyUrlFromEmail('a@163.com')).toBeNull()
+    expect(deriveCompanyUrlFromEmail('b@qq.com')).toBeNull()
+    expect(deriveCompanyUrlFromEmail('c@126.com')).toBeNull()
+    expect(deriveCompanyUrlFromEmail('d@sina.com')).toBeNull()
+  })
+
+  it('returns null on garbage input', () => {
+    expect(deriveCompanyUrlFromEmail('not an email')).toBeNull()
+    expect(deriveCompanyUrlFromEmail(null)).toBeNull()
+    expect(deriveCompanyUrlFromEmail('')).toBeNull()
+    expect(deriveCompanyUrlFromEmail('foo@')).toBeNull()
   })
 })
