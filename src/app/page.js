@@ -1267,6 +1267,28 @@ function HistoryPage({ user }) {
   )
 }
 
+// ─── SETTINGS CARD ────────────────────────────────────────────────────────────
+function SettingsCard({ title, description, adminBadge, children }) {
+  return (
+    <div className="bg-white border border-stripe-border rounded-stripe shadow-stripe-ambient overflow-hidden">
+      <div className="px-6 py-5 border-b border-stripe-border flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-subheading font-light text-stripe-navy">{title}</h3>
+          {description && (
+            <p className="mt-1 text-caption text-stripe-body">{description}</p>
+          )}
+        </div>
+        {adminBadge && (
+          <span className="text-[10px] bg-stripe-brandDark text-white px-2 py-1 rounded-stripe-sm shrink-0">
+            ADMIN
+          </span>
+        )}
+      </div>
+      <div className="px-6 py-5 space-y-5">{children}</div>
+    </div>
+  )
+}
+
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 function SettingsPage({ user }) {
   const [form, setForm] = useState({
@@ -1283,7 +1305,6 @@ function SettingsPage({ user }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [showKey, setShowKey] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => {
@@ -1303,7 +1324,8 @@ function SettingsPage({ user }) {
     })
   }, [])
 
-  const save = async () => {
+  const handleSave = async (e) => {
+    e.preventDefault()
     setSaving(true)
     await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       baseUrl: form.baseUrl,
@@ -1318,174 +1340,176 @@ function SettingsPage({ user }) {
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
   }
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={28} color={T.textTertiary} /></div>
+  const isAdmin = user?.role === 'admin'
+  const inputCls =
+    'w-full h-10 px-3 text-body font-light bg-white border border-stripe-border rounded-stripe-sm focus:outline-none focus:border-stripe-purple focus:ring-2 focus:ring-stripe-purple/20 transition'
+  const textareaCls =
+    'w-full px-3 py-2 text-body font-light bg-white border border-stripe-border rounded-stripe-sm resize-y focus:outline-none focus:border-stripe-purple focus:ring-2 focus:ring-stripe-purple/20 transition'
 
-  const isAdmin = user.role === 'admin'
+  if (loading) {
+    return (
+      <div className="py-16 flex justify-center">
+        <Spinner />
+      </div>
+    )
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, height: '100%', overflowY: 'auto' }}>
-      <div>
-        <p style={{ color: T.textTertiary, fontSize: 13 }}>
-          {isAdmin ? '配置全局 API 地址、系统 Prompt 及您自己的 API Key' : '配置您的 API Key 和模型名称'}
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '360px 1fr' : '360px', gap: 20 }}>
-        {/* My API config */}
-        <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, padding: '24px 28px', boxShadow: T.shadowCard }}>
-          <div style={{ color: T.textSecondary, fontSize: 13, fontWeight: 600, marginBottom: 20, paddingBottom: 14, borderBottom: `1px solid ${T.borderSecond}` }}>我的 API 配置</div>
-
-          <FormItem label="API Key" hint="仅对您本人生效">
-            <div style={{ position: 'relative' }}>
-              <input type={showKey ? 'text' : 'password'} value={form.apiKey || ''} onChange={e => setForm({ ...form, apiKey: e.target.value })}
-                placeholder="sk-..." style={{ ...inputStyle, paddingRight: 40, fontFamily: "'DM Mono',monospace", fontSize: 12.5 }} />
-              <button onClick={() => setShowKey(!showKey)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: T.textTertiary, cursor: 'pointer', padding: 3, display: 'flex' }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                  {showKey
-                    ? <><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></>
-                    : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" /></>
-                  }
-                </svg>
-              </button>
-            </div>
-          </FormItem>
-
-          <FormItem label="Model Name">
-            {(() => {
-              const DEFAULT_MODELS = ['claude-sonnet-4-6','gemini-3.1-pro-preview-vertex','gemini-3-pro-preview-thinking','gpt-5.4']
-              const cur = form.modelName || ''
-              const customModels = (form._customModels || []).filter(m => !DEFAULT_MODELS.includes(m))
-              const allModels = [...DEFAULT_MODELS, ...customModels]
-              const isAdding = form._addingModel
-              return (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {isAdding ? (
-                    <input
-                      autoFocus
-                      placeholder="输入模型名称，回车确认"
-                      style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5, flex: 1 }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && e.target.value.trim()) {
-                          const name = e.target.value.trim()
-                          const updated = [...new Set([...(form._customModels || []), name])]
-                          setForm({ ...form, modelName: name, _customModels: updated, _addingModel: false })
-                        } else if (e.key === 'Escape') {
-                          setForm({ ...form, _addingModel: false })
-                        }
-                      }}
-                      onBlur={e => {
-                        if (e.target.value.trim()) {
-                          const name = e.target.value.trim()
-                          const updated = [...new Set([...(form._customModels || []), name])]
-                          setForm({ ...form, modelName: name, _customModels: updated, _addingModel: false })
-                        } else {
-                          setForm({ ...form, _addingModel: false })
-                        }
-                      }}
-                    />
-                  ) : (
-                    <>
-                      <select value={cur} onChange={e => setForm({ ...form, modelName: e.target.value })}
-                        style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5, cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%239c8a72' strokeWidth='2' strokeLinecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 32, flex: 1 }}>
-                        {!allModels.includes(cur) && cur && <option value={cur}>{cur}</option>}
-                        {allModels.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <button
-                        onClick={() => setForm({ ...form, _addingModel: true })}
-                        style={{ width: 32, height: 32, borderRadius: T.radiusMd, border: `1px solid ${T.border}`, background: T.bgElevated, color: T.textSecondary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1, flexShrink: 0 }}
-                        title="添加自定义模型"
-                      >+</button>
-                    </>
-                  )}
-                </div>
-              )
-            })()}
-          </FormItem>
-
-          <div style={{ background: T.primaryBg, border: `1px solid ${T.primaryBorder}`, borderRadius: T.radiusMd, padding: '9px 12px' }}>
-            <div style={{ color: '#79c0ff', fontSize: 12, lineHeight: 1.6 }}>支持所有 OpenAI 兼容接口（Gemini、DeepSeek 等）</div>
-          </div>
-        </div>
-
-        {/* Admin global config */}
+    <form
+      onSubmit={handleSave}
+      className="max-w-[680px] mx-auto space-y-6 pb-28"
+    >
+      <SettingsCard title="模型配置" description="API 接入与主分析模型">
         {isAdmin && (
-          <div style={{ background: T.bgElevated, border: `1px solid ${T.border}`, borderRadius: T.radiusLg, padding: '24px 28px', boxShadow: T.shadowCard }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, paddingBottom: 14, borderBottom: `1px solid ${T.borderSecond}` }}>
-              <span style={{ color: T.textSecondary, fontSize: 13, fontWeight: 600 }}>全局配置</span>
-              <span style={{ fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 4, background: 'rgba(250,173,20,0.12)', color: '#faad14', border: '1px solid rgba(250,173,20,0.25)' }}>Admin</span>
-            </div>
-
-            <FormItem label="Base URL">
-              <input value={form.baseUrl || ''} onChange={e => setForm({ ...form, baseUrl: e.target.value })}
-                placeholder="https://ai.example.com/v1" style={{ ...inputStyle, fontFamily: "'DM Mono',monospace", fontSize: 12.5 }} />
-            </FormItem>
-
-            <FormItem label="System Prompt" hint="对用户隐藏">
-              <textarea value={form.systemPrompt || ''} onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
-                rows={14} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.7, fontSize: 13 }} />
-            </FormItem>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 12, color: T.textSecondary }}>SerpAPI Key(仅管理员)</label>
-              <input
-                type="password"
-                value={form.serpApiKey || ''}
-                onChange={e => setForm({ ...form, serpApiKey: e.target.value })}
-                placeholder="sk-serp-..."
-                style={{ width: '100%', padding: 8, marginTop: 4 }}
-              />
-              {serpUsage && (
-                <div style={{ fontSize: 11, color: T.textTertiary, marginTop: 4 }}>
-                  本月已调用 {serpUsage.count} 次 ({serpUsage.month})
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 12, color: T.textSecondary }}>结构化抽取模型</label>
-              <input
-                value={form.extractionModel || ''}
-                onChange={e => setForm({ ...form, extractionModel: e.target.value })}
-                placeholder="gemini-2.5-flash"
-                style={{ width: '100%', padding: 8, marginTop: 4 }}
-              />
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 12, color: T.textSecondary }}>抽取 Prompt</label>
-              <textarea
-                value={form.extractionPrompt || ''}
-                onChange={e => setForm({ ...form, extractionPrompt: e.target.value })}
-                rows={6}
-                style={{ width: '100%', padding: 8, marginTop: 4, fontFamily: T.fontMono }}
-              />
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 12, color: T.textSecondary }}>降级 System Prompt(用户关闭检索或情报失败时使用)</label>
-              <textarea
-                value={form.fallbackSystemPrompt || ''}
-                onChange={e => setForm({ ...form, fallbackSystemPrompt: e.target.value })}
-                rows={6}
-                style={{ width: '100%', padding: 8, marginTop: 4, fontFamily: T.fontMono }}
-              />
-            </div>
-          </div>
+          <FormItem label="Base URL" hint="OpenAI 兼容端点">
+            <input
+              className={inputCls}
+              value={form.baseUrl || ''}
+              onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+            />
+          </FormItem>
         )}
-      </div>
+        <FormItem label="API Key" hint="你的个人密钥,不与他人共享">
+          <PasswordInput
+            value={form.apiKey || ''}
+            onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+          />
+        </FormItem>
+        <FormItem label="主分析模型" hint="例:gemini-3.1-pro-preview-vertex">
+          {(() => {
+            const DEFAULT_MODELS = ['claude-sonnet-4-6','gemini-3.1-pro-preview-vertex','gemini-3-pro-preview-thinking','gpt-5.4']
+            const cur = form.modelName || ''
+            const customModels = (form._customModels || []).filter(m => !DEFAULT_MODELS.includes(m))
+            const allModels = [...DEFAULT_MODELS, ...customModels]
+            const isAdding = form._addingModel
+            return (
+              <div className="flex gap-2 items-center">
+                {isAdding ? (
+                  <input
+                    autoFocus
+                    placeholder="输入模型名称，回车确认"
+                    className={`${inputCls} font-mono text-caption-sm flex-1`}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && e.target.value.trim()) {
+                        e.preventDefault()
+                        const name = e.target.value.trim()
+                        const updated = [...new Set([...(form._customModels || []), name])]
+                        setForm({ ...form, modelName: name, _customModels: updated, _addingModel: false })
+                      } else if (e.key === 'Escape') {
+                        setForm({ ...form, _addingModel: false })
+                      }
+                    }}
+                    onBlur={e => {
+                      if (e.target.value.trim()) {
+                        const name = e.target.value.trim()
+                        const updated = [...new Set([...(form._customModels || []), name])]
+                        setForm({ ...form, modelName: name, _customModels: updated, _addingModel: false })
+                      } else {
+                        setForm({ ...form, _addingModel: false })
+                      }
+                    }}
+                  />
+                ) : (
+                  <>
+                    <select
+                      value={cur}
+                      onChange={e => setForm({ ...form, modelName: e.target.value })}
+                      className={`${inputCls} font-mono text-caption-sm cursor-pointer flex-1`}
+                    >
+                      {!allModels.includes(cur) && cur && <option value={cur}>{cur}</option>}
+                      {allModels.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, _addingModel: true })}
+                      className="w-10 h-10 rounded-stripe-sm border border-stripe-border bg-white text-stripe-purple hover:bg-stripe-purpleLight/20 flex items-center justify-center text-lg leading-none shrink-0 transition-colors"
+                      title="添加自定义模型"
+                    >+</button>
+                  </>
+                )}
+              </div>
+            )
+          })()}
+        </FormItem>
+      </SettingsCard>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={save} disabled={saving} style={{ padding: '8px 24px', border: 'none', borderRadius: T.radiusMd, cursor: saving ? 'wait' : 'pointer', background: saving ? 'rgba(22,119,255,0.5)' : T.primary, color: '#fff', fontSize: 13.5, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 7 }}>
-          {saving ? <><Spinner color="#fff" />保存中...</> : '保存设置'}
+      {isAdmin && (
+        <SettingsCard
+          title="实时情报"
+          description="SerpAPI 密钥与结构化抽取配置"
+          adminBadge
+        >
+          <FormItem label="SerpAPI Key">
+            <PasswordInput
+              value={form.serpApiKey || ''}
+              onChange={(e) => setForm({ ...form, serpApiKey: e.target.value })}
+            />
+            {serpUsage && (
+              <div className="mt-2 text-caption-sm text-stripe-body font-mono">
+                本月已调用{' '}
+                <span className="text-stripe-purple font-normal">{serpUsage.count}</span> 次
+                ({serpUsage.month})
+              </div>
+            )}
+          </FormItem>
+          <FormItem label="结构化抽取模型" hint="用便宜快速模型,如 gemini-2.5-flash">
+            <input
+              className={inputCls}
+              value={form.extractionModel || ''}
+              onChange={(e) => setForm({ ...form, extractionModel: e.target.value })}
+            />
+          </FormItem>
+          <FormItem label="抽取 Prompt">
+            <textarea
+              className={`${textareaCls} font-mono text-caption-sm`}
+              rows={8}
+              value={form.extractionPrompt || ''}
+              onChange={(e) => setForm({ ...form, extractionPrompt: e.target.value })}
+            />
+          </FormItem>
+        </SettingsCard>
+      )}
+
+      {isAdmin && (
+        <SettingsCard title="Prompt 模板" description="主分析与降级模板" adminBadge>
+          <FormItem
+            label="主 System Prompt(启用情报时使用)"
+            hint="强制绑定情报简报的证据驱动模板"
+          >
+            <textarea
+              className={`${textareaCls} font-mono text-caption-sm`}
+              rows={12}
+              value={form.systemPrompt || ''}
+              onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+            />
+          </FormItem>
+          <FormItem
+            label="Fallback System Prompt(关闭情报或情报失败时使用)"
+            hint="传统 5 维度模板"
+          >
+            <textarea
+              className={`${textareaCls} font-mono text-caption-sm`}
+              rows={8}
+              value={form.fallbackSystemPrompt || ''}
+              onChange={(e) => setForm({ ...form, fallbackSystemPrompt: e.target.value })}
+            />
+          </FormItem>
+        </SettingsCard>
+      )}
+
+      {/* Sticky save bar */}
+      <div className="fixed bottom-0 left-0 right-0 lg:left-60 bg-white/95 backdrop-blur border-t border-stripe-border py-4 px-4 sm:px-6 lg:px-8 flex items-center justify-end gap-3 z-20">
+        {saved && <span className="text-caption text-stripe-successText">✓ 已保存</span>}
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-10 px-6 text-btn text-white bg-stripe-purple hover:bg-stripe-purpleHover rounded-stripe-sm disabled:opacity-50 transition-colors flex items-center gap-2"
+        >
+          {saving && <Spinner size={14} color="#ffffff" />}
+          保存更改
         </button>
-        {saved && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.success, fontSize: 13 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            已保存
-          </div>
-        )}
       </div>
-    </div>
+    </form>
   )
 }
 
@@ -1609,12 +1633,20 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
   const [page, setPage] = useState('query')
+  const [serpUsage, setSerpUsage] = useState(null)
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.email) setUser(d) })
       .finally(() => setChecking(false))
   }, [])
+
+  useEffect(() => {
+    if (!user) { setSerpUsage(null); return }
+    fetch('/api/settings').then(r => r.ok ? r.json() : null).then(d => {
+      if (d && d.serpUsage) setSerpUsage(d.serpUsage)
+    }).catch(() => {})
+  }, [user])
 
   const logout = async () => { await fetch('/api/auth', { method: 'DELETE' }); setUser(null); setPage('query') }
 
@@ -1625,5 +1657,5 @@ export default function App() {
     : page === 'settings' ? <SettingsPage user={user} />
     : <QueryPage user={user} />
 
-  return <Layout user={user} onLogout={logout} page={page} setPage={setPage} serpUsage={null}>{content}</Layout>
+  return <Layout user={user} onLogout={logout} page={page} setPage={setPage} serpUsage={serpUsage}>{content}</Layout>
 }
