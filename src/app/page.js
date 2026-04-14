@@ -517,16 +517,38 @@ function QueryPage({ user }) {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           const raw = line.slice(6).trim()
-          if (raw === '') continue // heartbeat comment line
-          try {
-            const msg = JSON.parse(raw)
-            if (msg.error) throw new Error(msg.error)
-            if (msg.delta) {
-              lastContentAt = Date.now() // reset watchdog on real content
-              setResult(prev => prev + msg.delta)
-              if (resultRef.current) resultRef.current.scrollTop = resultRef.current.scrollHeight
-            }
-          } catch (e) { if (e.message !== 'Unexpected end of JSON input') throw e }
+          if (raw === '') continue
+          let msg
+          try { msg = JSON.parse(raw) }
+          catch (e) { if (e.message !== 'Unexpected end of JSON input') throw e; continue }
+
+          const type = msg.type || (msg.delta ? 'delta' : msg.error ? 'error' : null)
+
+          if (type === 'error' || type === 'intelError') {
+            throw new Error(msg.error || '未知错误')
+          }
+          if (type === 'intel') {
+            lastContentAt = Date.now()
+            setIntelProgress(prev => ({ ...prev, ...msg.partial }))
+            continue
+          }
+          if (type === 'intelDone') {
+            lastContentAt = Date.now()
+            setIntel(msg.intel)
+            setIntelProgress(msg.intel || {})
+            continue
+          }
+          if (type === 'delta' && msg.delta) {
+            lastContentAt = Date.now()
+            setResult(prev => prev + msg.delta)
+            if (resultRef.current) resultRef.current.scrollTop = resultRef.current.scrollHeight
+            continue
+          }
+          if (type === 'done') {
+            lastContentAt = Date.now()
+            if (msg.intel) setIntel(msg.intel)
+            continue
+          }
         }
       }
     } catch (e) {
