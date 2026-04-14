@@ -74,15 +74,31 @@ export async function POST(req) {
 
       const briefing = useBriefing ? formatIntelAsBriefing(intel) : ''
 
-      // Inject the user's own site content as a separate context block so the
-      // LLM can distinguish "us" from "the sender being investigated".
+      // Inject the user's own site content + Google search hits as a
+      // separate context block so the LLM can distinguish "us" from "the
+      // sender being investigated" and has richer grounding about our
+      // actual business (used when the target has a sparse footprint).
       const userSite = intel?.userSite
-      const userSiteBlock = userSite?.status === 'ok'
-        ? `【我方公司背景(收件方,仅供语境参考)】\n` +
+      const userContext = intel?.userContext
+      let userSiteBlock
+      if (userSite?.status === 'ok') {
+        userSiteBlock =
+          `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
           `网址:${url || '未提供'}\n` +
-          (userSite.title ? `标题:${userSite.title}\n` : '') +
-          `摘录:${(userSite.excerpt || '').slice(0, 1200).replace(/\n/g, ' ')}\n\n`
-        : `**我方公司网址:** ${url || '未提供'}\n\n`
+          (userSite.title ? `网站标题:${userSite.title}\n` : '') +
+          `网站摘录:${(userSite.excerpt || '').slice(0, 1500).replace(/\n/g, ' ')}\n`
+        if (userContext && userContext.results?.length > 0) {
+          userSiteBlock +=
+            `\n我方公司网络足迹(Google 搜索 ${userContext.query}):\n` +
+            userContext.results
+              .map((r, i) => `  ${i + 1}. ${r.title} — ${r.link}\n     ${r.snippet || ''}`)
+              .join('\n') +
+            `\n`
+        }
+        userSiteBlock += `\n`
+      } else {
+        userSiteBlock = `**我方公司网址:** ${url || '未提供'}\n\n`
+      }
 
       const textPart =
         (briefing ? `${briefing}\n\n---\n\n` : '') +
