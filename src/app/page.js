@@ -1153,8 +1153,20 @@ function isValidRecord(q) {
   return true
 }
 
+function ScoreChip({ label, value, color }) {
+  if (value == null || value === '') return null
+  const n = typeof value === 'number' ? value : parseInt(value)
+  if (Number.isNaN(n)) return null
+  return (
+    <div className="flex items-center gap-1 min-w-0">
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${color}`} />
+      <span className="text-caption-sm text-stripe-body truncate">{label}</span>
+      <span className="text-caption-sm font-medium text-stripe-label tabular-nums">{n}</span>
+    </div>
+  )
+}
+
 function HistoryCard({ query, active, onClick }) {
-  const score = query.riskLevel || extractScore(query.result)
   const hasIntel = query.intelEnabled === 'true' || query.intelEnabled === true
   const when = query.createdAt
     ? new Date(query.createdAt).toLocaleString('zh-CN', {
@@ -1164,6 +1176,11 @@ function HistoryCard({ query, active, onClick }) {
         minute: '2-digit',
       })
     : ''
+  const anyScore =
+    query.scoreInquiry != null ||
+    query.scoreCustomer != null ||
+    query.scoreMatch != null ||
+    query.scoreStrategy != null
   return (
     <button
       type="button"
@@ -1174,15 +1191,22 @@ function HistoryCard({ query, active, onClick }) {
           : 'bg-white border-stripe-border hover:border-stripe-purpleLight'
       }`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-caption font-mono text-stripe-label truncate flex-1">
+      <div className="mb-2">
+        <span className="block text-caption font-mono text-stripe-label truncate">
           {query.url || '(无URL)'}
         </span>
-        {score && <ScoreBadge score={score} size="sm" />}
       </div>
+      {anyScore && (
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 mb-2">
+          <ScoreChip label="询盘" value={query.scoreInquiry}  color="bg-stripe-ruby" />
+          <ScoreChip label="客户" value={query.scoreCustomer} color="bg-stripe-success" />
+          <ScoreChip label="匹配" value={query.scoreMatch}    color="bg-stripe-purple" />
+          <ScoreChip label="战略" value={query.scoreStrategy} color="bg-stripe-lemon" />
+        </div>
+      )}
       <div className="flex items-center justify-between text-caption-sm text-stripe-body">
         <span>{when}</span>
-        {hasIntel && <span className="text-stripe-purple">🔍 含情报</span>}
+        {hasIntel && <span className="text-stripe-purple">实时数据</span>}
       </div>
     </button>
   )

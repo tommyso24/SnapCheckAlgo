@@ -194,6 +194,18 @@ export async function POST(req) {
             : fullText.includes('低风险') ? 'low'
             : 'unknown'
 
+          const pickScore = (label) => {
+            const re = new RegExp(label + '[^0-9]{0,30}(\\d{1,3})\\s*\\/\\s*100')
+            const m = fullText.match(re)
+            if (!m) return null
+            const n = parseInt(m[1])
+            return n >= 0 && n <= 100 ? n : null
+          }
+          const scoreInquiry = pickScore('询盘质量分')
+          const scoreCustomer = pickScore('客户实力分')
+          const scoreMatch = pickScore('匹配度得分')
+          const scoreStrategy = pickScore('综合战略分')
+
           enqueue({ type: 'done', result: fullText, riskLevel, intel })
 
           saveQuery({
@@ -204,6 +216,10 @@ export async function POST(req) {
             imageCount: images.length,
             result: fullText,
             riskLevel,
+            scoreInquiry,
+            scoreCustomer,
+            scoreMatch,
+            scoreStrategy,
             createdAt: new Date().toISOString(),
             model: modelName,
             intel,
