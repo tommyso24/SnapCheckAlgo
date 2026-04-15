@@ -1194,6 +1194,7 @@ function HistoryPage({ user }) {
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
   const [expandError, setExpandError] = useState({})
+  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/queries').then(r => r.json()).then(d => {
@@ -1205,6 +1206,27 @@ function HistoryPage({ user }) {
       setLoading(false)
     })
   }, [])
+
+  // Lazy-load the heavy `intel` blob only when a card is clicked.
+  // List payload is intentionally lean (see lib/kv.js LIST_FIELDS).
+  const handleSelect = async (q) => {
+    if (selected === q) { setSelected(null); return }
+    setSelected(q)
+    if (q.intel !== undefined || !q.id) return
+    setDetailLoading(true)
+    try {
+      const r = await fetch(`/api/queries/${encodeURIComponent(q.id)}`)
+      if (r.ok) {
+        const full = await r.json()
+        setQueries(prev => prev.map(x => x.id === q.id ? { ...x, ...full } : x))
+        setSelected(prev => prev && prev.id === q.id ? { ...prev, ...full } : prev)
+      }
+    } catch {
+      // swallow — detail panel will just show what we have
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   const visible = queries.filter(q =>
     !search ||
@@ -1237,10 +1259,10 @@ function HistoryPage({ user }) {
           <div className="space-y-2 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-2">
             {visible.map((q, i) => (
               <HistoryCard
-                key={q.createdAt || i}
+                key={q.id || q.createdAt || i}
                 query={q}
                 active={selected === q}
-                onClick={() => setSelected(selected === q ? null : q)}
+                onClick={() => handleSelect(q)}
               />
             ))}
           </div>
@@ -1296,6 +1318,12 @@ function HistoryPage({ user }) {
                 </div>
 
                 {historyIntelEnabled && <IntelPanel intel={parsedIntel} />}
+                {!parsedIntel && detailLoading && (selected?.intelEnabled === 'true' || selected?.intelEnabled === true) && (
+                  <div className="bg-white border border-stripe-border rounded-stripe p-6 flex items-center justify-center gap-3 text-caption text-stripe-body">
+                    <Spinner />
+                    <span>加载情报数据…</span>
+                  </div>
+                )}
 
                 <div className="bg-white border border-stripe-border rounded-stripe shadow-stripe-card p-6">
                   <article className="max-w-none">
