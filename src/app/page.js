@@ -534,6 +534,17 @@ function IntelPanel({ intel }) {
           </span>
         )}
       </div>
+      {intel.meta?.extractionStatus && intel.meta.extractionStatus !== 'ok' && (
+        <div className="px-5 py-3 bg-stripe-ruby/10 border-b border-stripe-ruby/30 text-caption text-stripe-ruby">
+          <b className="font-normal">⚠️ 实体抽取失败</b>
+          <span className="ml-2 opacity-80">
+            ({intel.meta.extractionModel || '?'}):{intel.meta.extractionError || '未知错误'}
+          </span>
+          <div className="mt-1 text-caption-sm text-stripe-ruby/80">
+            没有抽到发件方实体,下游搜索无法进行。请检查控制台日志或换一个多模态模型。
+          </div>
+        </div>
+      )}
       {(e.companyName || e.companyUrl || e.personName || e.email) && (
         <div className="px-5 py-3 bg-stripe-purpleLight/15 border-b border-stripe-border text-caption text-stripe-label space-y-1">
           {e.companyName && (
