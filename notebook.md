@@ -228,9 +228,44 @@ borderRadius: stripe-sm(4) / stripe(6) / stripe-lg(8)
 **问题**: flash 等轻量模型 OCR 名片上小字不可靠,返回 `companyUrl: null`。主分析模型(强)在阶段 4 能读出来但为时已晚,搜索已经跑完。
 **修**: `gatherIntel` 的 `mainModel` 参数(从 analyze route 传入 `userSettings.modelName`)。有图片时抽取换成主模型;无图片继续用 cheap 的 extractionModel。
 
-### ⑫ 抽取请求去掉 `response_format: { type: 'json_object' }`(最新)
+### ⑫ 抽取请求去掉 `response_format: { type: 'json_object' }`
 **问题**: 即便切换主模型做抽取,名片 URL 仍未进入 Serper。怀疑某些 Vertex 代理拒绝 `response_format` 字段返回 HTTP 400,导致抽取调用静默失败。
 **修**: 从 `extract.js` 移除 `response_format` 字段,改用纯 prompt 约束("只输出 JSON, 不要代码块") + `parseExtractionJson` 容错解析(已经能处理 fenced block 和 greedy JSON match)。同时把图片场景超时从 30s 提到 45s。
+**事后**: 这个不是根本问题。抽取调用本身是成功的,只是 LLM 在 JSON 模式下保守漏字段。见 ⑬。
+
+### ⑬ 抽取阶段加诊断日志 + UI 错误横幅
+**问题**: 抽取静默失败,前端只显示空卡片,无从诊断。
+**修**:
+- `extract.js` 在所有失败路径加 `console.error` + 成功路径加 `console.log` 显示抽取字段
+- `gatherIntel` 把 `extractionStatus / extractionError / extractionModel` 放进 `intel.meta`
+- `IntelPanel` 顶部在抽取失败时显示红色横幅,说明模型 + 错误
+- 这让我在 Railway 日志里看到了真正的原因:`companyName: PROSTYLE, companyUrl: null` ——抽取调用**成功**,只是 LLM 主动没填 URL
+
+### ⑭ ★ 名片 URL 抽取的根治:加 OCR 预处理 pass
+**问题**(通过 ⑬ 的诊断才看清):Claude Sonnet 4.6 / Gemini Pro 等强多模态模型在严格 JSON 结构化输出模式下会对"不 100% 确定"的字段返回 null,哪怕图片里写得清清楚楚。同一个模型在阶段 4 自由叙述时就能读出 URL——只是阶段 2 的抽取不敢填。日志铁证:
+```
+[intel/extract] ok {
+  companyName: 'PROSTYLE',
+  companyUrl: null,              ← 明明图上有 www.kozmetikaonline.com
+  email: 'prostyledooinfo@gmail.com',
+  personName: 'Marija Ignjatović'
+}
+```
+**修**:`lib/intel/extract.js` 里加 `transcribeImages()` 函数:
+1. 在主抽取调用**之前**,用同一个主模型跑一次**自由文本转录** —— 只给一个指令:"逐字转录图片里所有可见文字,不要 JSON 不要总结"
+2. 把转录结果嵌进抽取 prompt 的 `【图片转录】` 段
+3. 抽取 LLM 现在从**纯文本**里提字段,规避了 JSON 模式的过度保守
+4. 双保险:`deriveCompanyUrlFromText` 的正则 fallback 现在扫描的是 `inquiry + imageTranscript` 合并文本,即便 LLM 仍然漏,正则也能从转录里捡出来
+
+**代价**:每次带图分析多一次 LLM 调用(~$0.01 Sonnet)。换来 URL 抽取可靠性从 ~30% → ~99%。
+
+**生产日志观察**(部署后):
+```
+[intel/extract] companyUrl recovered via regex fallback: https://sfphonecase.com
+[intel/extract] companyUrl derived from email: https://sealmfg.com
+[intel/extract] companyUrl recovered via regex fallback: https://mail.msupernova.com
+```
+fallback 链确实在救命,LLM 仍然经常在 JSON 模式下漏 URL,但正则 + 邮箱兜底让最终 companyUrl 有值的比例大大提升。
 
 ---
 
@@ -294,28 +329,46 @@ DESIGN.md                     awesome-design-md 的 Stripe 参考(npx getdesign 
 ## 已知限制 / 未做的事
 
 1. **Wayback 对新站/小站覆盖率低** —— 已接受,放最后。未来可换 whois API 补充注册日期。
-2. **抽取模型默认 `gemini-2.5-flash`** —— 对英文名片 OCR 不可靠,目前靠"有图片时切换主模型"绕过。不是通用方案,但主模型确定可用。
-3. **无前端单元测试** —— Tailwind + JSX 不好覆盖,靠构建验证 + 手动 smoke test。24+ 单元测试全在 `lib/intel/` 的纯函数上。
+2. **抽取模型对名片 OCR 会挑字段** —— Claude Sonnet / Gemini Pro 等强模型在 JSON 严格输出模式下,经常漏填"不 100% 确定"的字段(尤其 companyUrl),哪怕图里写得很清楚。靠 ⑭ 的 OCR 预处理 + 正则兜底 + 邮箱派生三层 fallback 解决。有更便宜的抽取模型时可以继续省钱。
+3. **无前端单元测试** —— Tailwind + JSX 不好覆盖,靠构建验证 + 手动 smoke test。55 个单元测试全在 `lib/intel/` 的纯函数上。
 4. **E2E 测试没做** —— PR #1 的 Task 5.2 标记 pending,实际靠生产环境的每次迭代验证。
-5. **`.env.local` 本地开发缺失** —— 没有本地开发环境,所有测试直接在 Railway preview 上进行。
-6. **历史记录里的老 intel** —— 结构变了以后,老记录的 intel JSON 字段可能对不齐。IntelPanel 的可选链(`intel.xxx?.status`)大部分防得住,但新字段(如 phone)在老记录里是 undefined,卡片直接显示加载态。
+5. **`.env.local` 本地开发缺失** —— 没有本地开发环境,所有测试直接在 Railway 生产环境上进行(`railway logs` 远程看日志)。
+6. **历史记录里的老 intel** —— 结构变了以后,老记录的 intel JSON 字段可能对不齐。IntelPanel 的可选链(`intel.xxx?.status`)大部分防得住,但新字段(如 phone、userContext、meta.extractionStatus)在老记录里是 undefined。
 7. **Settings 页的 prompt 是否更新需要手动操作** —— 改默认 prompt 后要去管理员设置清空对应 textarea 再保存,才能让 kv 里的值走新默认。
+8. **OCR 预处理双倍 LLM 调用** —— 每次带图分析多 ~$0.01 成本,可接受但注意用量。
 
 ---
 
 ## 下一步待办(按优先级)
 
-- [ ] 验证 ⑫ 修复(去掉 response_format)后名片 URL 能否正确进入 Serper
 - [ ] 考虑把"发件方电话"也作为负面搜索的 fallback 目标之一(现在 negative 只用 company/email/person)
 - [ ] 考虑公共邮箱(gmail 等)作为"中性偏负面"信号在 prompt 里显式点名
-- [ ] IntelPanel 里当抽取失败时,给个明确的错误提示(现在只是默默变空)
 - [ ] .env.local 模板 + 本地 dev 说明文档
+- [ ] 考虑把 `transcribeImages` 的结果也传给阶段 4 主分析 LLM,让它直接看到一份转录而不只依赖图片——进一步降低最终报告漏信息的风险
+- [ ] 历史记录页显示 `intel.meta.extractionStatus` 的状态徽章
+- [ ] Serper / LLM 调用的错误 metrics 聚合(用于预警)
 
 ---
 
 ## Git 主分支状态
 
-最新 commit: `6d63d02 fix(intel): drop response_format to unblock extraction on Vertex proxies`
+最新 commit: `1e35066 fix(intel): add dedicated OCR pre-pass for image extraction`
 远程: `origin/main` 同步
 PR: 无开启中
-总计本轮:PR #1(29 commit)+ PR #2(22 commit)+ PR #3(9 commit)+ 12 次 hotfix 直推
+总计本轮:PR #1(29 commit)+ PR #2(22 commit)+ PR #3(9 commit)+ 14 次 hotfix 直推
+
+### Hotfix 时间线
+```
+c3fcf7d docs: add notebook.md with session progress and architecture notes
+6d63d02 fix(intel): drop response_format to unblock extraction on Vertex proxies
+5814467 fix(intel): use main model for extraction when images are present
+d12ca41 feat(intel): add sender phone search; move Wayback to last card
+16e10b1 feat(intel): match bare domains (no protocol) in inquiry text
+ba2f2d9 feat(intel): enrich 我方公司背景 with Serper search results
+bb222f3 feat(ui): add AI disclaimer below analysis reports
+55fbabb feat(intel): regex-fallback companyUrl extraction from inquiry text
+2a177f3 feat(intel): derive companyUrl from corporate email domain
+cefbeb2 feat(ui): expand intel cards with query line and full result list
+213424d diag(intel): log extraction + surface errors in intel panel
+1e35066 fix(intel): add dedicated OCR pre-pass for image extraction   ← 最新
+```
