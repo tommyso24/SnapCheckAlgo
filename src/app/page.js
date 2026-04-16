@@ -1209,10 +1209,10 @@ function HistoryCard({ query, active, onClick }) {
       </div>
       {anyScore && (
         <div className="grid grid-cols-2 gap-x-2 gap-y-1 mb-2">
-          <ScoreChip label="询盘" value={query.scoreInquiry}  color="bg-stripe-ruby" />
-          <ScoreChip label="客户" value={query.scoreCustomer} color="bg-stripe-success" />
-          <ScoreChip label="匹配" value={query.scoreMatch}    color="bg-stripe-purple" />
-          <ScoreChip label="战略" value={query.scoreStrategy} color="bg-stripe-lemon" />
+          <ScoreChip label="询盘质量" value={query.scoreInquiry}  color="bg-stripe-ruby" />
+          <ScoreChip label="客户实力" value={query.scoreCustomer} color="bg-stripe-success" />
+          <ScoreChip label="双方匹配" value={query.scoreMatch}    color="bg-stripe-purple" />
+          <ScoreChip label="战略综合" value={query.scoreStrategy} color="bg-stripe-lemon" />
         </div>
       )}
       <div className="flex items-center justify-between text-caption-sm text-stripe-body">
