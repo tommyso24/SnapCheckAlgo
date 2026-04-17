@@ -35,21 +35,23 @@ export async function POST(req) {
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
   const HEARTBEAT_INTERVAL = 8000
+  const streamStart = Date.now()
 
   const stream = new ReadableStream({
     async start(controller) {
       let heartbeatTimer = null
+      let currentStage = 'init'
       const enqueue = (obj) => {
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)) } catch {}
       }
-      const enqueueRaw = (s) => {
-        try { controller.enqueue(encoder.encode(s)) } catch {}
-      }
-      heartbeatTimer = setInterval(() => enqueueRaw(': ping\n\n'), HEARTBEAT_INTERVAL)
+      heartbeatTimer = setInterval(() => {
+        enqueue({ type: 'heartbeat', stage: currentStage, elapsed: Date.now() - streamStart })
+      }, HEARTBEAT_INTERVAL)
 
       // ── Stage 1-3: intel ─────────────────────────────────────────────────
       let intel = null
       if (enableIntel) {
+        currentStage = 'intel'
         try {
           intel = await gatherIntel({
             url,
@@ -68,6 +70,7 @@ export async function POST(req) {
       }
 
       // ── Stage 4: main LLM ────────────────────────────────────────────────
+      currentStage = 'analysis'
       const useBriefing = !!intel
       const systemPrompt = useBriefing
         ? globalSettings.systemPrompt

@@ -1,3 +1,11 @@
 {
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "functions": {
+    "src/app/api/analyze/route.js": {
+      "maxDuration": 300
+    },
+    "src/app/api/v1/analyze/route.js": {
+      "maxDuration": 300
+    }
+  }
 }

@@ -65,7 +65,7 @@ function Logo({ variant = 'dark', size = 24 }) {
         <circle cx="16" cy="16" r="13" stroke={stroke} strokeWidth="2.5" />
         <path d="M11 16L15 20L22 12" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span className={`text-link font-normal tracking-tight ${text}`}>trade-check</span>
+      <span className={`text-link font-normal tracking-tight ${text}`}>秒探</span>
     </div>
   )
 }
@@ -787,7 +787,7 @@ function LoginPage({ onLogin }) {
               LinkedIn · Panjiva · 建站时间 · 公司网站 · 负面舆情 —— 所有判断都可追溯到原始来源。
             </p>
           </div>
-          <div className="text-caption-sm text-white/40">© 2026 trade-check</div>
+          <div className="text-caption-sm text-white/40">© 2026 秒探 SnapCheck</div>
         </div>
 
         {/* Gradient decoration */}
@@ -869,7 +869,7 @@ function QueryPage({ user }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [enableIntel, setEnableIntel] = useState(() => {
     if (typeof window === 'undefined') return true
-    const v = window.localStorage.getItem('trade-check:enableIntel')
+    const v = window.localStorage.getItem('snapcheck:enableIntel')
     return v === null ? true : v === 'true'
   })
   const [intel, setIntel] = useState(null)
@@ -878,7 +878,7 @@ function QueryPage({ user }) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('trade-check:enableIntel', String(enableIntel))
+      window.localStorage.setItem('snapcheck:enableIntel', String(enableIntel))
     }
   }, [enableIntel])
 
@@ -971,6 +971,10 @@ function QueryPage({ user }) {
             lastContentAt = Date.now()
             setIntel(msg.intel)
             setIntelProgress(msg.intel || {})
+            continue
+          }
+          if (type === 'heartbeat') {
+            lastContentAt = Date.now()
             continue
           }
           if (type === 'delta' && msg.delta) {

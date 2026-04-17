@@ -3,7 +3,7 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata = {
-  title: 'trade-check',
+  title: '秒探 SnapCheck',
   description: '外贸背调 · 证据驱动的风险分析',
 }
 
