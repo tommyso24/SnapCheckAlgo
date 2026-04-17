@@ -278,8 +278,271 @@ async function analyze(payload) {
   - `enable_intel: true` 时返回完整实体结构，8 个字段: `company_name / person_name / person_title / email / phone / country / company_url / products`，任一字段可能为 `null`（提取失败时），`products` 为字符串数组（可为空 `[]`）。
   - `enable_intel: false` 时 `buyer` 对象仍然存在，但 8 个字段**全部为 null**（`products` 为空数组 `[]`）——语义上等价于 null。SN 平台调用方需对每个字段做空值处理，**不要假设 `buyer` 本身为 null**。
 - **`model`**: 返回值取决于 admin 在后台实际配置的 `Model Name`（存 Redis）。如果 admin 配置了模型覆盖，代码里的默认值 `gemini-3.1-pro-preview-vertex` 会被覆盖，这是**设计预期行为**——不是 bug。SN 平台如果需要感知模型变化，可读取响应中的 `data.model` 字段。
-- **`intel`**: `enable_intel: false` 或情报管线全部失败时为 `null`；成功时返回 8 路 OSINT 子结构。
+- **`intel`**: `enable_intel: false` 或情报管线全部失败时为 `null`；成功时返回 8 路 OSINT 子结构（详见下方 schema 段）。
 - **`tokens`**: 由上游 LLM 的 `usage` 字段透传，部分 provider 可能不返回 → 字段为 `null`。
+
+---
+
+## `intel` 字段 Schema（供 SN 前端对接）
+
+`intel` 对象在 `enable_intel:true` 成功时返回。包含：
+- `extracted` — 发件方实体抽取结果（8 字段）
+- 8 个 OSINT 子键：`website / wayback / linkedin / facebook / panjiva / negative / generalSearch / phone`
+- `meta` — 情报管线元信息
+
+### 统一外层约定
+
+除 `extracted` 和 `meta` 外，8 个 OSINT 子键都带一个 `status` 字段，取值枚举 + 对应结构如下：
+
+| status | 触发条件 | 携带字段 |
+|---|---|---|
+| `'ok'` | 搜索/抓取成功返回（可能结果为空） | `query` (OSINT 搜索)、业务字段 |
+| `'failed'` | 上游接口报错（HTTP 非 2xx、超时、解析失败） | `query` (OSINT 搜索，website/wayback 无 query)、`error` |
+| `'skipped'` | 缺少必要输入参数（例如没有公司名、没有 URL） | `error`（说明原因） |
+
+> SN 前端应对这三种 status 分别做 UI：`ok` 渲染数据、`failed` 展示错误 chip、`skipped` 折叠/淡化。
+
+---
+
+### 子键 1: `extracted`（发件方实体抽取）
+
+整个询盘分析的种子数据——所有其他 OSINT 搜索的 query 都从这里派生。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `companyName` | `string \| null` | 发件方公司名 |
+| `companyUrl` | `string \| null` | 发件方官网 URL（已规范化为 `https://...`，可能来自 LLM 抽取、正则扫描或邮箱域名推导） |
+| `personName` | `string \| null` | 发件方姓名 |
+| `personTitle` | `string \| null` | 发件方职位 |
+| `email` | `string \| null` | 发件方邮箱 |
+| `phone` | `string \| null` | 发件方电话 |
+| `country` | `string \| null` | 发件方国家（中文或 ISO 代码） |
+| `products` | `string[]` | 询盘中提及的产品数组（可为空 `[]`，不会是 null） |
+
+当整个抽取步骤失败时，`intel.extracted` 整个为 `null`。
+
+---
+
+### 子键 2: `website`（发件方公司官网抓取）
+
+基于 `extracted.companyUrl` 抓取。
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `url: string` (规范化 URL)<br>`title: string \| null` (HTML `<title>`)<br>`siteName: string \| null` (og:site_name)<br>`excerpt: string` (正文摘录，≤3000 字符，已去标签) |
+| `'failed'` | `error: string` (例如 `"HTTP 404"`, `"fetch failed"`) |
+| `'skipped'` | `error: string` (常见：`"询盘未提及发件方公司网址"`、`"no url"`) |
+
+---
+
+### 子键 3: `wayback`（Archive.org CDX 建站时间）
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `firstSnapshot: string \| null` (ISO 日期 `"2018-03-15"`；可能为 `null` 如果没有历史快照)<br>`ageYears: number \| null` (保留 1 位小数，如 `6.3`) |
+| `'failed'` | `error: string` |
+| `'skipped'` | `error: string` |
+
+**建站时间 < 2 年** 通常是外贸诈骗的强信号（声称 "15 年老厂" 但域名只有 1 年）。前端建议对 `ageYears` 做分段颜色。
+
+---
+
+### 子键 4: `linkedin`（发件方 LinkedIn 搜索）
+
+Query 模板：`site:linkedin.com/in "{personName}" "{companyName}"`（有人名时）或 `site:linkedin.com/company "{companyName}"`（只有公司名时）。
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `query: string`<br>`found: boolean` (`topResults.length > 0`)<br>`topResults: SerpResult[]` (最多 5 条) |
+| `'failed'` | `query: string`, `error: string` |
+| `'skipped'` | `error: string` (常见：`"缺少人名和公司名"`) |
+
+---
+
+### 子键 5: `facebook`（发件方 Facebook 存在性）
+
+Query 模板：`site:facebook.com "{companyName}"`（或 personName fallback）。字段 schema 与 `linkedin` **完全一致**（`query / found / topResults`）。
+
+---
+
+### 子键 6: `panjiva`（海关进出口足迹）
+
+Query 模板：`site:panjiva.com "{companyName}"`。
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `query: string`<br>`hasRecord: boolean`<br>`resultCount: number` (服务端抓取了最多 10 条，但只返回前 5 条给客户端)<br>`topResults: SerpResult[]` (最多 5 条) |
+| `'failed'` | `query: string`, `error: string` |
+| `'skipped'` | `error: string` (`"缺少公司名"`) |
+
+**声称 "老牌贸易商" 但 `hasRecord: false`** 是强负面信号。
+
+---
+
+### 子键 7: `negative`（负面舆情搜索）
+
+Query 模板：`"{companyName}" (scam OR fraud OR 骗 OR complaint)`。
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `query: string`<br>`hitCount: number`<br>`hits: SerpResult[]` (最多 5 条) |
+| `'failed'` | `query: string`, `error: string` |
+| `'skipped'` | `error: string` (`"缺少公司名/邮箱/人名"`) |
+
+---
+
+### 子键 8: `generalSearch`（通用品牌搜索）
+
+Query 模板：`"{companyName}"`（简单包名搜索）。
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `query: string`<br>`topResults: SerpResult[]` (最多 5 条，无 `found` 字段) |
+| `'failed'` | `query: string`, `error: string` |
+| `'skipped'` | `error: string` (`"缺少公司名"`) |
+
+---
+
+### 子键 9: `phone`（发件方电话反查）
+
+Query 模板：`"{normalizedPhone}"`（去掉空格、横杠、括号，要求长度 ≥ 6）。
+
+| status | 附加字段 |
+|---|---|
+| `'ok'` | `query: string`<br>`hitCount: number`<br>`hits: SerpResult[]` (最多 5 条) |
+| `'failed'` | `query: string`, `error: string` |
+| `'skipped'` | `error: string` (常见：`"询盘未提及发件方电话"`) |
+
+**电话同时在多个毫无关联的商家页面出现** = 可能是假电话或公用号，强负面信号。
+
+---
+
+### `SerpResult` 通用结构
+
+出现在所有 OSINT 子键的结果数组中：
+
+```ts
+{
+  title: string,   // 搜索结果标题（可能为空 ""）
+  link: string,    // 完整 URL
+  snippet: string  // Google 摘要片段
+}
+```
+
+---
+
+### `meta` 元信息
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `durationMs` | `number` | 整个情报管线耗时（毫秒） |
+| `skipped` | `string[]` | 被 skip 的子键 + 原因数组，例如 `["phone (询盘未提及发件方电话)"]` |
+| `extractionStatus` | `'ok' \| 'failed' \| 'skipped'` | 实体抽取步骤结果 |
+| `extractionError` | `string \| null` | 抽取失败时的错误描述 |
+| `extractionModel` | `string` | 实际用于抽取的模型（带图片时用主模型，否则用 extractionModel 全局配置） |
+
+---
+
+### 完整示例（来自生产的一次 `enable_intel:true` 请求）
+
+```json
+{
+  "extracted": {
+    "companyName": "Global Trading Solutions Ltd.",
+    "companyUrl": "https://globaltrading-solutions-kenya.com",
+    "personName": "James Wilson",
+    "personTitle": null,
+    "email": "james.wilson@gmail.com",
+    "phone": "+254700123456",
+    "country": "Kenya",
+    "products": ["LED display products"]
+  },
+  "website": {
+    "status": "failed",
+    "error": "fetch failed"
+  },
+  "wayback": {
+    "status": "ok",
+    "firstSnapshot": null,
+    "ageYears": null
+  },
+  "linkedin": {
+    "status": "ok",
+    "query": "site:linkedin.com/in \"James Wilson\" \"Global Trading Solutions Ltd.\"",
+    "found": true,
+    "topResults": [
+      { "title": "James Wilson - ...", "link": "https://linkedin.com/in/...", "snippet": "..." }
+    ]
+  },
+  "facebook": {
+    "status": "ok",
+    "query": "site:facebook.com \"Global Trading Solutions Ltd.\"",
+    "found": true,
+    "topResults": [
+      { "title": "...", "link": "https://facebook.com/...", "snippet": "..." }
+    ]
+  },
+  "panjiva": {
+    "status": "ok",
+    "query": "site:panjiva.com \"Global Trading Solutions Ltd.\"",
+    "hasRecord": false,
+    "resultCount": 0,
+    "topResults": []
+  },
+  "negative": {
+    "status": "ok",
+    "query": "\"Global Trading Solutions Ltd.\" (scam OR fraud OR 骗 OR complaint)",
+    "hitCount": 3,
+    "hits": [
+      { "title": "...", "link": "...", "snippet": "..." }
+    ]
+  },
+  "generalSearch": {
+    "status": "ok",
+    "query": "\"Global Trading Solutions Ltd.\"",
+    "topResults": [
+      { "title": "...", "link": "...", "snippet": "..." }
+    ]
+  },
+  "phone": {
+    "status": "ok",
+    "query": "\"+254700123456\"",
+    "hitCount": 3,
+    "hits": [
+      { "title": "Nairobi Driving School ...", "link": "...", "snippet": "..." }
+    ]
+  },
+  "meta": {
+    "durationMs": 16875,
+    "skipped": [],
+    "extractionStatus": "ok",
+    "extractionError": null,
+    "extractionModel": "gemini-3-flash-preview"
+  }
+}
+```
+
+---
+
+### SN 前端渲染指引
+
+| 子键 | 推荐 UI | 空态处理 |
+|---|---|---|
+| `extracted` | 名片式卡片，8 字段标签 + 值；`null` 值灰色占位 | `intel.extracted` 整体为 `null` → 展示"抽取失败，请检查询盘内容" |
+| `website` | 顶部 hero（标题 + 摘录前 200 字 + 外链按钮） | `failed` → 红色错误 chip ("网站不可达")；`skipped` → 淡化 ("询盘未提及网址") |
+| `wayback` | 单行数字强调（建站年份 + age chip） | `firstSnapshot === null` → "无历史快照"（强烈可疑信号） |
+| `linkedin` / `facebook` | 列表卡片（每条一个 card：title + snippet + 外链） | `found: false` → "无匹配结果"（中性信号） |
+| `panjiva` | 带 "有海关记录 / 无记录" 强调徽章；有 `topResults` 时列出 | `hasRecord: false` → 醒目红色 chip（老牌贸易商却无记录 = 强负面） |
+| `negative` | 红色警示卡片，`hitCount` 大数字 + 命中列表 | `hitCount: 0` → 绿色 chip "未发现负面舆情" |
+| `generalSearch` | 通用列表（和 linkedin 样式一致） | `topResults.length === 0` → 淡灰"查无此司" |
+| `phone` | 列表卡片 + `hitCount` 徽章；多个不相关商家命中时加警告 | `skipped` → "询盘未提供电话" |
+
+**通用规则：**
+- `status === 'failed'` 时**所有子键**都应该显示小尺寸的 error chip + `error` 消息，不展开数据
+- `status === 'skipped'` 应该折叠到最小，不占垂直空间
+- `topResults` / `hits` / `topResults` 数组可能为 `[]`（`status:'ok'` 但没结果），前端需要区分"空数组"和"缺失字段"
+- **所有子键的 `query` 字段只在 `status:'ok'` 或 `'failed'` 时存在**，`skipped` 时没有（因为根本没发请求）
+- `meta.durationMs` 可以用来展示"情报耗时 Xs"
 
 ---
 
