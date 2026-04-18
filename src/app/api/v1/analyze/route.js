@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { getGlobalSettings, getUserSettings, saveQuery } from '@/lib/kv'
 import { gatherIntel, formatIntelAsBriefing } from '@/lib/intel'
 import { newRequestId, hashInquiry, writeObservationLog } from '@/lib/obs'
+import { normalizeRequest } from '@/lib/requestNormalizer'
 
 // ─── SERVICE_API_KEY auth ───────────────────────────────────────────────────
 function authenticateService(req) {
@@ -27,16 +28,22 @@ export async function POST(req) {
   try { body = await req.json() }
   catch { return Response.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 }) }
 
-  const { inquiry, company = {}, images = [], options = {} } = body
-  if (!inquiry?.trim()) {
+  const normalized = normalizeRequest(body)
+  const { inquiry_text, company_profile, inquiry_images, enable_intel, scan_mode } = normalized
+  if (!inquiry_text?.trim()) {
     return Response.json({ ok: false, error: 'inquiry is required' }, { status: 400 })
   }
+
+  // company_profile accepts either legacy object ({ name, website, intro, ... })
+  // or new string form — downstream uses companyObj/companyText consistently.
+  const companyObj = (typeof company_profile === 'object' && company_profile !== null) ? company_profile : {}
+  const companyText = typeof company_profile === 'string' ? company_profile : ''
 
   const encoder = new TextEncoder()
   const streamStart = Date.now()
   const HEARTBEAT_MS = 8000
-  const requestId = newRequestId()
-  const inputHash = hashInquiry(inquiry)
+  const requestId = normalized.request_id || newRequestId()
+  const inputHash = hashInquiry(inquiry_text)
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -47,7 +54,7 @@ export async function POST(req) {
       // Observation log state — mutated as the request progresses.
       // recordObs() is idempotent (fires once).
       const obs = {
-        enableIntel: options.enable_intel !== false,
+        enableIntel: enable_intel,
         riskLevel: null, scores: null, model: null, tokens: null,
         fired: false,
       }
@@ -57,7 +64,7 @@ export async function POST(req) {
         writeObservationLog(requestId, {
           request_id: requestId,
           timestamp: new Date().toISOString(),
-          user_id: 'service',
+          scan_mode,
           input_hash: inputHash,
           output_summary: status === 'success' ? {
             risk_level: obs.riskLevel,
@@ -119,7 +126,7 @@ export async function POST(req) {
         if (!apiKey) return fail('config', 'Admin API Key not configured')
         const modelName = adminSettings.modelName?.trim() || 'gemini-3.1-pro-preview-vertex'
 
-        const enableIntel = options.enable_intel !== false
+        const enableIntel = enable_intel
         obs.enableIntel = enableIntel
         if (enableIntel && !globalSettings.serpApiKey?.trim()) {
           return fail('config', 'SerpAPI Key not configured, set enable_intel: false to skip')
@@ -128,7 +135,7 @@ export async function POST(req) {
         // ── Prepare image payloads ─────────────────────────────────────────
         progress('prepare_images')
         const preparedImages = []
-        for (const img of images.slice(0, 4)) {
+        for (const img of inquiry_images.slice(0, 4)) {
           if (img.base64) {
             preparedImages.push({ base64: img.base64, type: img.type || 'image/jpeg' })
           } else if (img.url) {
@@ -144,14 +151,14 @@ export async function POST(req) {
         }
 
         // ── Stage 1-3: Intel pipeline ──────────────────────────────────────
-        const url = company.website || ''
+        const url = companyObj.website || ''
         let intel = null
         if (enableIntel) {
           progress('gather_intel')
           try {
             intel = await gatherIntel({
               url,
-              inquiry,
+              inquiry: inquiry_text,
               images: preparedImages,
               apiKey,
               mainModel: modelName,
@@ -190,15 +197,20 @@ export async function POST(req) {
               `\n`
           }
           userSiteBlock += `\n`
-        } else if (company.intro) {
+        } else if (companyObj.intro) {
           userSiteBlock =
             `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
-            `公司名:${company.name || '未提供'}\n` +
+            `公司名:${companyObj.name || '未提供'}\n` +
             `网址:${url || '未提供'}\n` +
-            `简介:${company.intro}\n` +
-            (company.industry ? `行业:${company.industry}\n` : '') +
-            (company.product_lines?.length ? `产品线:${company.product_lines.join('、')}\n` : '') +
+            `简介:${companyObj.intro}\n` +
+            (companyObj.industry ? `行业:${companyObj.industry}\n` : '') +
+            (companyObj.product_lines?.length ? `产品线:${companyObj.product_lines.join('、')}\n` : '') +
             `\n`
+        } else if (companyText) {
+          userSiteBlock =
+            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
+            (url ? `网址:${url}\n` : '') +
+            `资料:${companyText}\n\n`
         } else {
           userSiteBlock = `**我方公司网址:** ${url || '未提供'}\n\n`
         }
@@ -206,7 +218,7 @@ export async function POST(req) {
         const textPart =
           (briefing ? `${briefing}\n\n---\n\n` : '') +
           userSiteBlock +
-          `**客户询盘内容:**\n${inquiry}`
+          `**客户询盘内容:**\n${inquiry_text}`
 
         let userContent
         if (preparedImages.length > 0) {
@@ -271,7 +283,7 @@ export async function POST(req) {
         const riskLevel = riskMatched || 'medium'
         if (!riskMatched) {
           console.warn('[v1/analyze] risk_level keyword miss, defaulting to medium', {
-            model: modelName, caller: company.name || 'external',
+            model: modelName, caller: companyObj.name || 'external',
           })
         }
 
@@ -308,9 +320,9 @@ export async function POST(req) {
 
         // ── Save to history ─────────────────────────────────────────────────
         saveQuery({
-          userEmail: `api:${company.name || 'external'}`,
+          userEmail: `api:${companyObj.name || 'external'}`,
           url: url,
-          inquiry: inquiry.slice(0, 2000),
+          inquiry: inquiry_text.slice(0, 2000),
           hasImages: preparedImages.length > 0,
           imageCount: preparedImages.length,
           result: fullText,

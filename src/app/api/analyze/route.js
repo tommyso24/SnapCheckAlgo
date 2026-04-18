@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth'
 import { getGlobalSettings, getUserSettings, saveQuery } from '@/lib/kv'
 import { gatherIntel, formatIntelAsBriefing } from '@/lib/intel'
 import { newRequestId, hashInquiry, writeObservationLog } from '@/lib/obs'
+import { normalizeRequest } from '@/lib/requestNormalizer'
 
 export async function POST(req) {
   const { session, error, status } = await requireSession()
@@ -13,7 +14,18 @@ export async function POST(req) {
   try { body = await req.json() }
   catch { return Response.json({ error: '请求格式错误' }, { status: 400 }) }
 
-  const { url, inquiry, images = [], enableIntel = true } = body
+  // Web frontend historically omitted enable_intel (defaulting to true).
+  // Preserve that by defaulting the normalized flag to true only here.
+  if (body.enable_intel === undefined && body.enableIntel === undefined && body.options?.enable_intel === undefined) {
+    body = { ...body, enableIntel: true }
+  }
+
+  const normalized = normalizeRequest(body)
+  const { inquiry_text, company_profile, inquiry_images, enable_intel: enableIntel, scan_mode } = normalized
+  // Web frontend sends `url` as a top-level field, not part of company_profile.
+  const url = (body.url || '').toString()
+  const inquiry = inquiry_text
+  const images = inquiry_images
   if (!url?.trim() && !inquiry?.trim() && images.length === 0) {
     return Response.json({ error: '请填写信息或上传图片' }, { status: 400 })
   }
@@ -37,7 +49,7 @@ export async function POST(req) {
   const decoder = new TextDecoder()
   const HEARTBEAT_INTERVAL = 8000
   const streamStart = Date.now()
-  const requestId = newRequestId()
+  const requestId = normalized.request_id || newRequestId()
   const inputHash = hashInquiry(inquiry)
 
   const stream = new ReadableStream({
@@ -58,7 +70,7 @@ export async function POST(req) {
         writeObservationLog(requestId, {
           request_id: requestId,
           timestamp: new Date().toISOString(),
-          user_id: 'web',
+          scan_mode,
           input_hash: inputHash,
           output_summary: status === 'success' ? {
             risk_level: obs.riskLevel,
