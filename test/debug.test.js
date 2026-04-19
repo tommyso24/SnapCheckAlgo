@@ -64,3 +64,44 @@ describe('truncatePayload', () => {
     expect(out.size).toBeGreaterThan(100000)
   })
 })
+
+describe('serializeImages', () => {
+  it('serializes small base64 image inline', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img1')
+    const images = [
+      { base64: 'aGVsbG8=', type: 'image/png' },  // 'hello'
+    ]
+    const out = serializeImages(images, 256)
+    expect(out).toHaveLength(1)
+    expect(out[0].type).toBe('image/png')
+    expect(out[0].size).toBe(5)
+    expect(out[0].sha256).toBeTruthy()
+    expect(out[0].base64).toBe('aGVsbG8=')
+    expect(out[0].truncated).toBe(false)
+  })
+
+  it('truncates base64 larger than maxImageKB', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img2')
+    // 300 KB of 'A' characters → base64 = ~400 KB (exceeds 256 KB)
+    const big = Buffer.alloc(300 * 1024, 'A').toString('base64')
+    const out = serializeImages([{ base64: big, type: 'image/jpeg' }], 256)
+    expect(out[0].truncated).toBe(true)
+    expect(out[0].sha256).toBeTruthy()
+    expect(out[0].base64.length).toBeLessThanOrEqual(128 * 1024)
+  })
+
+  it('preserves url field when present', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img3')
+    const images = [{ url: 'https://example.com/x.jpg', type: 'image/jpeg' }]
+    const out = serializeImages(images, 256)
+    expect(out[0].url).toBe('https://example.com/x.jpg')
+    expect(out[0].base64).toBeUndefined()
+  })
+
+  it('returns empty array for null/undefined input', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img4')
+    expect(serializeImages(null, 256)).toEqual([])
+    expect(serializeImages(undefined, 256)).toEqual([])
+    expect(serializeImages([], 256)).toEqual([])
+  })
+})
