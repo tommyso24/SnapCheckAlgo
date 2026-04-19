@@ -75,6 +75,16 @@ export async function POST(req) {
         imageCount: inquiry_images.length,
         caller: companyObj.name || (typeof company_profile === 'string' ? previewText(company_profile, 60) : null),
       })
+      log.info('raw_inputs', {
+        inquiry_text,
+        company_profile,
+        inquiry_images: inquiry_images.map(img => ({
+          type: img.type || null,
+          hasBase64: !!img.base64,
+          base64Len: img.base64 ? img.base64.length : 0,
+          url: img.url || null,
+        })),
+      })
 
       // Observation log state — mutated as the request progresses.
       // recordObs() is idempotent (fires once).
@@ -272,6 +282,16 @@ export async function POST(req) {
           hasImages: preparedImages.length > 0,
           systemPromptLen: (systemPrompt || '').length,
         })
+        log.info('llm_request', {
+          endpoint,
+          model: modelName,
+          useBriefing,
+          hasImages: preparedImages.length > 0,
+          messages: [
+            ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+            { role: 'user', content: typeof userContent === 'string' ? userContent : '[multimodal content]' },
+          ],
+        })
 
         let llmRes
         try {
@@ -308,6 +328,11 @@ export async function POST(req) {
           log.fail({ phase: 'llm_empty', llmMs: Date.now() - tLlm })
           return fail('llm', 'LLM returned empty content')
         }
+        log.info('llm_response', {
+          content: fullText,
+          finishReason: llmJson.choices?.[0]?.finish_reason || null,
+          usage: llmJson.usage || null,
+        })
         log.info('llm_ok', {
           model: modelName,
           fullTextLen: fullText.length,
