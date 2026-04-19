@@ -105,3 +105,26 @@ describe('serializeImages', () => {
     expect(serializeImages([], 256)).toEqual([])
   })
 })
+
+describe('key helpers', () => {
+  it('utcDateKey formats YYYYMMDD in UTC', async () => {
+    const { utcDateKey } = await import('@/lib/debug?bust=key1')
+    const d = new Date('2026-04-19T23:59:00Z')
+    expect(utcDateKey(d)).toBe('20260419')
+  })
+
+  it('metaKey produces debug:meta:YYYYMMDD:requestId', async () => {
+    const { metaKey } = await import('@/lib/debug?bust=key2')
+    expect(metaKey('20260419', 'abc')).toBe('debug:meta:20260419:abc')
+  })
+
+  it('traceKey produces debug:trace:YYYYMMDD:requestId', async () => {
+    const { traceKey } = await import('@/lib/debug?bust=key3')
+    expect(traceKey('20260419', 'abc')).toBe('debug:trace:20260419:abc')
+  })
+
+  it('indexKey produces debug:index:YYYYMMDD', async () => {
+    const { indexKey } = await import('@/lib/debug?bust=key4')
+    expect(indexKey('20260419')).toBe('debug:index:20260419')
+  })
+})
