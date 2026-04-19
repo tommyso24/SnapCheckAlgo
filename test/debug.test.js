@@ -212,3 +212,56 @@ describe('startTrace / endTrace', () => {
     redisMod.__failOn(null)
   })
 })
+
+describe('recordEvent', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('appends event to trace list with seq and ts', async () => {
+    const { recordEvent, startTrace } = await import('@/lib/debug?bust=rec1')
+    const redisMod = await import('@upstash/redis')
+    await startTrace({ requestId: 'rx', route: 'v1/analyze', startMs: 1000, meta: {} })
+    await recordEvent({
+      requestId: 'rx',
+      startMs: 1000,
+      tag: 'intel/extract',
+      event: 'ok',
+      level: 'info',
+      info: { companyUrl: 'https://foo.com' },
+    })
+    const pushes = redisMod.__calls.filter(c => c[0] === 'rpush')
+    expect(pushes.length).toBeGreaterThan(0)
+    const payload = JSON.parse(pushes[pushes.length - 1][2])
+    expect(payload.tag).toBe('intel/extract')
+    expect(payload.event).toBe('ok')
+    expect(payload.ts).toBeGreaterThan(0)
+    expect(payload.seq).toBe(1)
+    expect(payload.payload.companyUrl).toBe('https://foo.com')
+  })
+
+  it('is noop when disabled', async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'false'
+    const { recordEvent } = await import('@/lib/debug?bust=rec2')
+    const redisMod = await import('@upstash/redis')
+    redisMod.__reset()
+    await recordEvent({ requestId: 'rx', startMs: 0, tag: 't', event: 'e', level: 'info', info: {} })
+    expect(redisMod.__calls).toHaveLength(0)
+  })
+
+  it('truncates oversized payload', async () => {
+    const { recordEvent, startTrace } = await import('@/lib/debug?bust=rec3')
+    const redisMod = await import('@upstash/redis')
+    await startTrace({ requestId: 'rx2', route: 'v1/analyze', startMs: 1000, meta: {} })
+    redisMod.__reset()
+    const big = { text: 'x'.repeat(50000) }
+    await recordEvent({ requestId: 'rx2', startMs: 1000, tag: 't', event: 'big', level: 'info', info: big })
+    const pushes = redisMod.__calls.filter(c => c[0] === 'rpush')
+    const payload = JSON.parse(pushes[pushes.length - 1][2])
+    expect(payload.truncated).toBe(true)
+    expect(payload.payload.__truncated).toBe(true)
+    expect(payload.payloadSize).toBeGreaterThan(50000)
+  })
+})
