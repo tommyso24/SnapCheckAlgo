@@ -81,6 +81,16 @@ export async function POST(req) {
         imageCount: images.length,
         hasUrl: !!url?.trim(),
       })
+      log.info('raw_inputs', {
+        inquiry_text: inquiry,
+        company_profile,
+        inquiry_images: images.map(img => ({
+          type: img.type || null,
+          hasBase64: !!img.base64,
+          base64Len: img.base64 ? img.base64.length : 0,
+          url: img.url || null,
+        })),
+      })
 
       // Observation log state — mutated as the request progresses.
       // recordObs() is idempotent (fires once).
@@ -207,6 +217,16 @@ export async function POST(req) {
         useBriefing,
         hasImages: images.length > 0,
         systemPromptLen: (systemPrompt || '').length,
+      })
+      log.info('llm_request', {
+        endpoint,
+        model: modelName,
+        useBriefing,
+        hasImages: images.length > 0,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: typeof userContent === 'string' ? userContent : '[multimodal content]' },
+        ],
       })
 
       let upstreamRes
@@ -348,6 +368,11 @@ export async function POST(req) {
           obs.scores = { inquiry: scoreInquiry, customer: scoreCustomer, match: scoreMatch, strategy: scoreStrategy }
           obs.model = modelName
           obs.tokens = tokens
+          log.info('llm_response', {
+            content: fullText,
+            finishReason: null,
+            usage: llmUsage || null,
+          })
           log.ok({
             riskLevel,
             scores: obs.scores,

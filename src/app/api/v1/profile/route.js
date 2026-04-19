@@ -243,6 +243,7 @@ export async function POST(req) {
         hasSupplementary: !!supplementary_info,
         supplementaryLen: (supplementary_info || '').length,
       })
+      log.info('raw_inputs', { website_url, supplementary_info })
 
       const obs = {
         source: null,
@@ -381,6 +382,14 @@ export async function POST(req) {
           source: sourceTag,
           payloadLen: userPayload.length,
         })
+        log.info('llm_request', {
+          endpoint,
+          model: modelName,
+          messages: [
+            { role: 'system', content: PROFILE_SYSTEM_PROMPT },
+            { role: 'user', content: userPayload },
+          ],
+        })
 
         let llmRes
         try {
@@ -413,6 +422,10 @@ export async function POST(req) {
         const llmJson = await llmRes.json()
         const report = llmJson.choices?.[0]?.message?.content || ''
         if (!report) return fail('llm_error', 'LLM returned empty content')
+        log.info('llm_response', { content: report, tokens: {
+          prompt: llmJson.usage?.prompt_tokens || null,
+          completion: llmJson.usage?.completion_tokens || null,
+        } })
         log.info('llm_ok', {
           model: modelName,
           reportLen: report.length,

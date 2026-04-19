@@ -1,0 +1,308 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+vi.mock('@upstash/redis', () => {
+  const store = new Map()
+  const calls = []
+  let failOn = null
+  const maybeFail = (name) => { if (failOn === name || failOn === '*') throw new Error(`simulated ${name} failure`) }
+  return {
+    Redis: class {
+      constructor() {}
+      hset = vi.fn(async (key, data) => { maybeFail('hset'); calls.push(['hset', key, data]); store.set(key, { ...(store.get(key) || {}), ...data }); return 1 })
+      hget = vi.fn(async (key, field) => { maybeFail('hget'); return (store.get(key) || {})[field] })
+      hgetall = vi.fn(async (key) => { maybeFail('hgetall'); return store.get(key) || null })
+      zadd = vi.fn(async (key, ...args) => { maybeFail('zadd'); calls.push(['zadd', key, args]); return 1 })
+      zrange = vi.fn(async () => { maybeFail('zrange'); return [] })
+      rpush = vi.fn(async (key, val) => { maybeFail('rpush'); calls.push(['rpush', key, val]); const arr = store.get(key) || []; arr.push(val); store.set(key, arr); return arr.length })
+      lrange = vi.fn(async (key) => { maybeFail('lrange'); return store.get(key) || [] })
+      expire = vi.fn(async () => { maybeFail('expire'); return 1 })
+      del = vi.fn(async (key) => { maybeFail('del'); store.delete(key); return 1 })
+    },
+    __store: store,
+    __calls: calls,
+    __reset: () => { store.clear(); calls.length = 0; failOn = null },
+    __failOn: (name) => { failOn = name },
+  }
+})
+
+describe('debug.js env helpers', () => {
+  beforeEach(() => {
+    delete process.env.DEBUG_TRACE_ENABLED
+    delete process.env.DEBUG_TRACE_TTL_DAYS
+    delete process.env.DEBUG_TRACE_MAX_PAYLOAD_KB
+    delete process.env.DEBUG_TRACE_MAX_IMAGE_KB
+  })
+
+  it('isTraceEnabled defaults to true when unset', async () => {
+    const { isTraceEnabled } = await import('@/lib/debug')
+    expect(isTraceEnabled()).toBe(true)
+  })
+
+  it('isTraceEnabled returns false when DEBUG_TRACE_ENABLED=false', async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'false'
+    const mod = await import('@/lib/debug?bust=1')
+    expect(mod.isTraceEnabled()).toBe(false)
+  })
+
+  it('getConfig reads TTL and payload limits with defaults', async () => {
+    const { getConfig } = await import('@/lib/debug?bust=2')
+    const c = getConfig()
+    expect(c.ttlDays).toBe(14)
+    expect(c.maxPayloadKB).toBe(8)
+    expect(c.maxImageKB).toBe(256)
+  })
+
+  it('getConfig reads TTL override from env', async () => {
+    process.env.DEBUG_TRACE_TTL_DAYS = '7'
+    process.env.DEBUG_TRACE_MAX_PAYLOAD_KB = '16'
+    const { getConfig } = await import('@/lib/debug?bust=3')
+    const c = getConfig()
+    expect(c.ttlDays).toBe(7)
+    expect(c.maxPayloadKB).toBe(16)
+  })
+})
+
+describe('truncatePayload', () => {
+  it('returns payload unchanged when under limit', async () => {
+    const { truncatePayload } = await import('@/lib/debug?bust=trunc1')
+    const obj = { a: 'hello', b: 123 }
+    const out = truncatePayload(obj, 8)
+    expect(out.truncated).toBe(false)
+    expect(out.payload).toEqual(obj)
+    expect(out.size).toBeGreaterThan(0)
+  })
+
+  it('truncates payload when over limit (string field)', async () => {
+    const { truncatePayload } = await import('@/lib/debug?bust=trunc2')
+    const big = { text: 'x'.repeat(20000) }
+    const out = truncatePayload(big, 8) // 8 KB = 8192 bytes
+    expect(out.truncated).toBe(true)
+    expect(out.size).toBeGreaterThan(8192)
+    expect(JSON.stringify(out.payload).length).toBeLessThanOrEqual(9000)
+    expect(out.payload.__truncated).toBe(true)
+  })
+
+  it('records original size even after truncation', async () => {
+    const { truncatePayload } = await import('@/lib/debug?bust=trunc3')
+    const big = { text: 'a'.repeat(100000) }
+    const out = truncatePayload(big, 8)
+    expect(out.size).toBeGreaterThan(100000)
+  })
+})
+
+describe('serializeImages', () => {
+  it('serializes small base64 image inline', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img1')
+    const images = [
+      { base64: 'aGVsbG8=', type: 'image/png' },  // 'hello'
+    ]
+    const out = serializeImages(images, 256)
+    expect(out).toHaveLength(1)
+    expect(out[0].type).toBe('image/png')
+    expect(out[0].size).toBe(5)
+    expect(out[0].sha256).toBeTruthy()
+    expect(out[0].base64).toBe('aGVsbG8=')
+    expect(out[0].truncated).toBe(false)
+  })
+
+  it('truncates base64 larger than maxImageKB', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img2')
+    // 300 KB of 'A' characters → base64 = ~400 KB (exceeds 256 KB)
+    const big = Buffer.alloc(300 * 1024, 'A').toString('base64')
+    const out = serializeImages([{ base64: big, type: 'image/jpeg' }], 256)
+    expect(out[0].truncated).toBe(true)
+    expect(out[0].sha256).toBeTruthy()
+    expect(out[0].base64.length).toBeLessThanOrEqual(128 * 1024)
+  })
+
+  it('preserves url field when present', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img3')
+    const images = [{ url: 'https://example.com/x.jpg', type: 'image/jpeg' }]
+    const out = serializeImages(images, 256)
+    expect(out[0].url).toBe('https://example.com/x.jpg')
+    expect(out[0].base64).toBeUndefined()
+  })
+
+  it('returns empty array for null/undefined input', async () => {
+    const { serializeImages } = await import('@/lib/debug?bust=img4')
+    expect(serializeImages(null, 256)).toEqual([])
+    expect(serializeImages(undefined, 256)).toEqual([])
+    expect(serializeImages([], 256)).toEqual([])
+  })
+})
+
+describe('key helpers', () => {
+  it('utcDateKey formats YYYYMMDD in UTC', async () => {
+    const { utcDateKey } = await import('@/lib/debug?bust=key1')
+    const d = new Date('2026-04-19T23:59:00Z')
+    expect(utcDateKey(d)).toBe('20260419')
+  })
+
+  it('metaKey produces debug:meta:YYYYMMDD:requestId', async () => {
+    const { metaKey } = await import('@/lib/debug?bust=key2')
+    expect(metaKey('20260419', 'abc')).toBe('debug:meta:20260419:abc')
+  })
+
+  it('traceKey produces debug:trace:YYYYMMDD:requestId', async () => {
+    const { traceKey } = await import('@/lib/debug?bust=key3')
+    expect(traceKey('20260419', 'abc')).toBe('debug:trace:20260419:abc')
+  })
+
+  it('indexKey produces debug:index:YYYYMMDD', async () => {
+    const { indexKey } = await import('@/lib/debug?bust=key4')
+    expect(indexKey('20260419')).toBe('debug:index:20260419')
+  })
+})
+
+describe('startTrace / endTrace', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('startTrace writes meta hash and index zset', async () => {
+    const { startTrace } = await import('@/lib/debug?bust=start1')
+    const redisMod = await import('@upstash/redis')
+    await startTrace({
+      requestId: 'req-123',
+      route: 'v1/analyze',
+      startMs: 1745000000000,
+      meta: { scanMode: 'online', enableIntel: true, caller: 'sn' },
+    })
+    const calls = redisMod.__calls
+    expect(calls.some(c => c[0] === 'hset' && c[1].startsWith('debug:meta:'))).toBe(true)
+    expect(calls.some(c => c[0] === 'zadd' && c[1].startsWith('debug:index:'))).toBe(true)
+  })
+
+  it('startTrace is noop when DEBUG_TRACE_ENABLED=false', async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'false'
+    const { startTrace } = await import('@/lib/debug?bust=start2')
+    const redisMod = await import('@upstash/redis')
+    redisMod.__reset()
+    await startTrace({ requestId: 'x', route: 'v1/analyze', startMs: 0, meta: {} })
+    expect(redisMod.__calls).toHaveLength(0)
+  })
+
+  it('endTrace updates meta with status/endMs/duration', async () => {
+    const { startTrace, endTrace } = await import('@/lib/debug?bust=end1')
+    const redisMod = await import('@upstash/redis')
+    redisMod.__reset()
+    await startTrace({ requestId: 'r2', route: 'analyze', startMs: 1000, meta: {} })
+    await endTrace({ requestId: 'r2', startMs: 1000, endMs: 3000, status: 'success', outcome: { riskLevel: 'high' } })
+    const hsets = redisMod.__calls.filter(c => c[0] === 'hset')
+    expect(hsets.length).toBeGreaterThanOrEqual(2)
+    const last = hsets[hsets.length - 1][2]
+    expect(last.status).toBe('success')
+    expect(last.endMs).toBe(3000)
+    expect(last.durationMs).toBe(2000)
+  })
+
+  it('endTrace never throws when Redis fails', async () => {
+    const { endTrace } = await import('@/lib/debug?bust=end2')
+    await expect(endTrace({ requestId: 'missing', startMs: 0, endMs: 1, status: 'error' })).resolves.not.toThrow()
+  })
+
+  it('safeAsync swallows Redis errors without throwing', async () => {
+    const { startTrace, endTrace } = await import('@/lib/debug?bust=err1')
+    const redisMod = await import('@upstash/redis')
+    redisMod.__failOn('hset')
+    await expect(startTrace({ requestId: 'failcase', route: 'v1/analyze', startMs: 1000, meta: {} })).resolves.not.toThrow()
+    await expect(endTrace({ requestId: 'failcase', startMs: 1000, endMs: 2000, status: 'error' })).resolves.not.toThrow()
+    redisMod.__failOn(null)
+  })
+})
+
+describe('recordEvent', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('appends event to trace list with seq and ts', async () => {
+    const { recordEvent, startTrace } = await import('@/lib/debug?bust=rec1')
+    const redisMod = await import('@upstash/redis')
+    await startTrace({ requestId: 'rx', route: 'v1/analyze', startMs: 1000, meta: {} })
+    await recordEvent({
+      requestId: 'rx',
+      startMs: 1000,
+      tag: 'intel/extract',
+      event: 'ok',
+      level: 'info',
+      info: { companyUrl: 'https://foo.com' },
+    })
+    const pushes = redisMod.__calls.filter(c => c[0] === 'rpush')
+    expect(pushes.length).toBeGreaterThan(0)
+    const payload = JSON.parse(pushes[pushes.length - 1][2])
+    expect(payload.tag).toBe('intel/extract')
+    expect(payload.event).toBe('ok')
+    expect(payload.ts).toBeGreaterThan(0)
+    expect(payload.seq).toBe(1)
+    expect(payload.payload.companyUrl).toBe('https://foo.com')
+  })
+
+  it('is noop when disabled', async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'false'
+    const { recordEvent } = await import('@/lib/debug?bust=rec2')
+    const redisMod = await import('@upstash/redis')
+    redisMod.__reset()
+    await recordEvent({ requestId: 'rx', startMs: 0, tag: 't', event: 'e', level: 'info', info: {} })
+    expect(redisMod.__calls).toHaveLength(0)
+  })
+
+  it('truncates oversized payload', async () => {
+    const { recordEvent, startTrace } = await import('@/lib/debug?bust=rec3')
+    const redisMod = await import('@upstash/redis')
+    await startTrace({ requestId: 'rx2', route: 'v1/analyze', startMs: 1000, meta: {} })
+    redisMod.__reset()
+    const big = { text: 'x'.repeat(50000) }
+    await recordEvent({ requestId: 'rx2', startMs: 1000, tag: 't', event: 'big', level: 'info', info: big })
+    const pushes = redisMod.__calls.filter(c => c[0] === 'rpush')
+    const payload = JSON.parse(pushes[pushes.length - 1][2])
+    expect(payload.truncated).toBe(true)
+    expect(payload.payload.__truncated).toBe(true)
+    expect(payload.payloadSize).toBeGreaterThan(50000)
+  })
+})
+
+describe('fetchTraceDetail', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('returns null for unknown requestId', async () => {
+    const { fetchTraceDetail } = await import('@/lib/debug?bust=det1')
+    const out = await fetchTraceDetail('nope', '20260419')
+    expect(out).toBeNull()
+  })
+
+  it('returns meta + events for known requestId', async () => {
+    const { startTrace, recordEvent, fetchTraceDetail } = await import('@/lib/debug?bust=det2')
+    const startMs = new Date('2026-04-19T12:00:00Z').getTime()
+    await startTrace({ requestId: 'detail-1', route: 'v1/analyze', startMs, meta: { caller: 'sn' } })
+    await recordEvent({ requestId: 'detail-1', startMs, tag: 'intel/extract', event: 'ok', info: { x: 1 } })
+    const out = await fetchTraceDetail('detail-1', '20260419')
+    expect(out.meta.requestId).toBe('detail-1')
+    expect(out.meta.caller).toBe('sn')
+    expect(out.events).toHaveLength(1)
+    expect(out.events[0].tag).toBe('intel/extract')
+  })
+})
+
+describe('fetchTraceList', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('returns empty on date with no traces', async () => {
+    const { fetchTraceList } = await import('@/lib/debug?bust=lst1')
+    const out = await fetchTraceList({ date: '20260419' })
+    expect(out.items).toEqual([])
+    expect(out.nextCursor).toBeNull()
+  })
+})
