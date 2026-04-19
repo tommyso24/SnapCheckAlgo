@@ -265,3 +265,44 @@ describe('recordEvent', () => {
     expect(payload.payloadSize).toBeGreaterThan(50000)
   })
 })
+
+describe('fetchTraceDetail', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('returns null for unknown requestId', async () => {
+    const { fetchTraceDetail } = await import('@/lib/debug?bust=det1')
+    const out = await fetchTraceDetail('nope', '20260419')
+    expect(out).toBeNull()
+  })
+
+  it('returns meta + events for known requestId', async () => {
+    const { startTrace, recordEvent, fetchTraceDetail } = await import('@/lib/debug?bust=det2')
+    const startMs = new Date('2026-04-19T12:00:00Z').getTime()
+    await startTrace({ requestId: 'detail-1', route: 'v1/analyze', startMs, meta: { caller: 'sn' } })
+    await recordEvent({ requestId: 'detail-1', startMs, tag: 'intel/extract', event: 'ok', info: { x: 1 } })
+    const out = await fetchTraceDetail('detail-1', '20260419')
+    expect(out.meta.requestId).toBe('detail-1')
+    expect(out.meta.caller).toBe('sn')
+    expect(out.events).toHaveLength(1)
+    expect(out.events[0].tag).toBe('intel/extract')
+  })
+})
+
+describe('fetchTraceList', () => {
+  beforeEach(async () => {
+    process.env.DEBUG_TRACE_ENABLED = 'true'
+    const mod = await import('@upstash/redis')
+    mod.__reset?.()
+  })
+
+  it('returns empty on date with no traces', async () => {
+    const { fetchTraceList } = await import('@/lib/debug?bust=lst1')
+    const out = await fetchTraceList({ date: '20260419' })
+    expect(out.items).toEqual([])
+    expect(out.nextCursor).toBeNull()
+  })
+})
