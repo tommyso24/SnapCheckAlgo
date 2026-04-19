@@ -2,8 +2,8 @@
 
 **日期:** 2026-04-19
 **状态:** 设计待确认
-**影响范围:** `lib/logger.js`（扩展）、新增 `lib/debug.js`、`src/app/api/admin/trace/*`、`src/app/admin/traces/*`、现有 route / intel 文件加若干纯新增 log 调用
-**对业务逻辑的改动:** 零。现有任何业务语句、分支、返回值一律不改动，只在函数体空隙处 append 新的 `log.xxx()` 调用。
+**影响范围:** `lib/logger.js`（扩展）、新增 `lib/debug.js`、`src/app/api/admin/trace/*`、`src/app/_components/DebugPage.js`（新增）、`src/app/page.js` 增加 1 个 NavItem + 1 个 page 分支、现有 route / intel 文件加若干纯新增 log 调用
+**对业务逻辑的改动:** 零。现有任何业务语句、分支、返回值一律不改动，只在函数体空隙处 append 新的 `log.xxx()` 调用。`src/app/page.js` 只是在左侧菜单和页面路由分支里加条目，和现有 NavItem / 页面分支同款写法。
 
 ---
 
@@ -48,7 +48,11 @@
 - 扩展 `lib/logger.js`：增加一个 sink 钩子，`createLogger` 每次调用除 stdout 之外额外把事件交给 `debug.js`（受 ENV 开关控制）
 - 在三个 route 文件（`/api/analyze`、`/api/v1/analyze`、`/api/v1/profile`）和若干 intel 节点文件的函数体**空隙**处，**纯新增** log 调用以捕获原文（例如 `log.info('raw_inputs', {...})`、`log.info('llm_request', {...})`、`log.info('llm_response', {...})`）。**不删不改任何现有代码**
 - 新增 `/api/admin/trace`（列表）和 `/api/admin/trace/:requestId`（详情）JSON API，admin-only
-- 新增 `/admin/traces` 列表页和 `/admin/traces/:requestId` 详情页，admin-only
+- UI 集成到**现有主应用** `src/app/page.js`：
+  - 左侧菜单新增 `Debug` NavItem（admin-only，和现有「分析 / 历史 / 设置」同款样式）
+  - 新增 `page === 'debug'` 分支，渲染 `<DebugPage user={user} />`
+  - 新建 `src/app/_components/DebugPage.js` 包含列表 + 详情双视图（靠内部 state `selectedRequestId` 切换，不新增 URL 路由）
+  - 支持 URL query param `?page=debug&trace=<requestId>` 用于深链分享
 - 环境变量开关：`DEBUG_TRACE_ENABLED`、`DEBUG_TRACE_TTL_DAYS`、`DEBUG_TRACE_MAX_PAYLOAD_KB`、`DEBUG_TRACE_MAX_IMAGE_KB`
 - 单元测试 + 鉴权测试
 
@@ -253,23 +257,56 @@ if (isTraceEnabled()) {
 - `GET /api/admin/trace/:requestId?date=YYYYMMDD`（date 可选，不填自动扫当天和昨天）
 - 返回：`{ ok, data: { meta, events } }`
 
-### 6.5 Admin UI（新建）
+### 6.5 Admin UI（集成到现有主应用）
 
-**`src/app/admin/traces/page.js`** —— 列表页
-- 顶部：日期选择器（默认今天，UTC）、route 下拉、status 下拉、requestId 搜索框
-- 表格列：开始时间 | requestId（短 8 位） | route | status（彩色徽章） | 时长 | riskLevel | caller | 询盘预览（80 字）
-- 点击行跳详情
-- 分页（cursor-based）
+**改动点 1：`src/app/page.js`**（纯加，不删不改）
 
-**`src/app/admin/traces/[requestId]/page.js`** —— 详情页
-- 顶部：meta 卡片 —— requestId、时间、时长、status、riskLevel、scores、model、tokens
-- 左栏：输入区 —— inquiry_text 全文、company_profile 全文、images 缩略图（<=256KB 直显 base64、>256KB 显链接 + 哈希）
+- `pageTitles` 字典新增一项：`debug: 'Debug'`
+- 左侧 `<nav>` 内、「设置」下方新增一个 admin-only NavItem：
+  ```jsx
+  {isAdmin && (
+    <NavItem
+      icon={<DebugIcon />}
+      label="Debug"
+      active={page === 'debug'}
+      onClick={() => { setPage('debug'); setMobileOpen(false) }}
+      adminBadge
+    />
+  )}
+  ```
+- `App` 根组件页面分发逻辑新增一支：
+  ```jsx
+  const content =
+      page === 'debug'    ? <DebugPage user={user} />
+    : page === 'history'  ? <HistoryPage user={user} />
+    : page === 'settings' ? <SettingsPage user={user} />
+    :                       <QueryPage user={user} />
+  ```
+- 新增一个极简 `DebugIcon` SVG 组件（和现有 `SearchIcon` / `ClockIcon` / `GearIcon` 同款风格）
+- 挂载时读 URL query：若有 `?page=debug&trace=xxx` 则同步 `page` 与 `DebugPage` 内部的 `selectedRequestId`，方便深链分享
+
+**改动点 2：`src/app/_components/DebugPage.js`**（新建）
+
+单文件组件，内部靠 state 切换两种视图：
+
+**列表视图**（默认，`selectedRequestId == null`）
+- 顶部筛选条：日期选择器（默认今天 UTC）、status 下拉（all/success/error/running）、route 下拉（all/v1/analyze/v1/profile/analyze）、requestId 搜索框
+- 表格列：开始时间 | requestId（短 8 位，点击进详情） | route | status（彩色徽章） | 时长 | riskLevel | caller | 询盘预览（80 字）
+- cursor-based 分页「加载更多」按钮
+- 对应 API：`GET /api/admin/trace?date=...&status=...&route=...&limit=50&cursor=...`
+
+**详情视图**（点行后，`selectedRequestId != null`）
+- 顶部：返回列表按钮 + meta 卡片（requestId、时间、时长、status、riskLevel、scores、model、tokens）
+- 左栏：输入区 —— inquiry_text 全文、company_profile 全文、images 缩略图（≤256 KB 直显 base64，>256 KB 显哈希占位 + 下载链接）
 - 中栏：**节点时间线** —— 按 seq 排序，每个节点一张卡：
   - 顶部：tag（左）| event（中）| 耗时（右）| 状态色（绿/黄/红）
-  - 展开：payload JSON pretty-print
+  - 展开：payload JSON pretty-print（用原生 `<pre>` 或轻量语法高亮）
   - 同一 tag 连续事件自动折叠成一组（例如 `intel/extract` 的 `start → ocr_start → ocr_ok → ocr_full → llm_call → extract_llm_request → extract_llm_response → llm_ok → fallback_input → fallback → ok` 全部归到一张主卡下），主卡显示总耗时，点开展开所有子事件
   - 悬挂请求（只有 start 没有 ok/fail）顶部徽章显示 `running` 黄色，提示"请求可能中途崩溃或正在执行"
 - 右栏：最终 LLM 报告全文（从 `llm_response` 的 payload 里抓）
+- 对应 API：`GET /api/admin/trace/:requestId`
+
+**样式**：沿用现有 Stripe-like 设计 token（`text-stripe-navy` / `border-stripe-border` / `rounded-stripe-sm` 等），和 SettingsPage / HistoryPage 视觉一致。
 
 ### 6.6 环境变量
 
@@ -367,8 +404,9 @@ if (isTraceEnabled()) {
 - `lib/auth.js`：**零改动**
 - route handler 业务流程：**零改动**（只在函数体空隙 append 纯新增 log 调用）
 - intel pipeline 节点逻辑：**零改动**（同上）
-- 前端用户页面：**零改动**
-- API 契约：**零改动**
+- 前端现有页面（QueryPage / HistoryPage / SettingsPage / LoginPage）内部逻辑：**零改动**
+- `src/app/page.js` 的 Layout / App 根组件：**仅追加**（admin-only 的 NavItem、pageTitles 多一项、App 的 page 分发多一支），现有 3 个 NavItem 和 3 个已有页面分支一字不改
+- API 契约：**零改动**（只新增 `/api/admin/trace/*`，不动现有任何路由）
 - 数据库 schema：**零改动**（只是在 Redis 里多一个 `debug:` 前缀的键空间）
 - CI / 部署：**零改动**
 
