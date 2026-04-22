@@ -4,6 +4,9 @@ import { getGlobalSettings, getUserSettings, saveQuery } from '@/lib/kv'
 import { gatherIntel, formatIntelAsBriefing } from '@/lib/intel'
 import { newRequestId, hashInquiry, writeObservationLog } from '@/lib/obs'
 import { normalizeRequest, deriveOwnDomains } from '@/lib/requestNormalizer'
+import { buildUserSiteBlock } from '@/lib/analyze/prompt'
+import { prepareImages } from '@/lib/analyze/prepareImages'
+import { callMainLLM, LLM_TIMEOUT_MS } from '@/lib/analyze/llmCall'
 import { createLogger, previewText, runWithRequestContext } from '@/lib/logger'
 
 const log = createLogger('route/v1-analyze')
@@ -170,43 +173,10 @@ export async function POST(req) {
         }
 
         // ── Prepare image payloads ─────────────────────────────────────────
-        // P6: image CDNs (especially Chinese ones, Alibaba, and most SN-
-        // hosted buckets) commonly reject requests without a browser UA.
-        // Silent failures used to just drop the image with no log line;
-        // now every failure leaves a trace so degraded image-based
-        // inquiries are diagnosable.
+        // See lib/analyze/prepareImages.js for the fetch-UA + failure-log
+        // contract (P6).
         progress('prepare_images')
-        const preparedImages = []
-        const IMG_FETCH_UA =
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        for (const img of inquiry_images.slice(0, 4)) {
-          if (img.base64) {
-            preparedImages.push({ base64: img.base64, type: img.type || 'image/jpeg' })
-          } else if (img.url) {
-            const imgHost = (() => { try { return new URL(img.url).host } catch { return null } })()
-            try {
-              const res = await fetch(img.url, {
-                headers: {
-                  'User-Agent': IMG_FETCH_UA,
-                  Accept: 'image/*,*/*;q=0.8',
-                },
-                signal: AbortSignal.timeout(10_000),
-              })
-              if (res.ok) {
-                const buf = await res.arrayBuffer()
-                const base64 = Buffer.from(buf).toString('base64')
-                preparedImages.push({ base64, type: img.type || res.headers.get('content-type') || 'image/jpeg' })
-              } else {
-                log.warn('image_fetch_fail', { host: imgHost, status: res.status, reason: `HTTP ${res.status}` })
-              }
-            } catch (e) {
-              log.warn('image_fetch_fail', {
-                host: imgHost,
-                reason: (e?.name === 'TimeoutError' || /timeout/i.test(e?.message)) ? 'timeout' : (e?.message || String(e)).slice(0, 160),
-              })
-            }
-          }
-        }
+        const preparedImages = await prepareImages(inquiry_images, log)
 
         // ── Stage 1-3: Intel pipeline ──────────────────────────────────────
         // Derive ALL domains the seller owns from company_profile regardless
@@ -247,46 +217,15 @@ export async function POST(req) {
         const briefing = useBriefing ? formatIntelAsBriefing(intel) : ''
 
         // Priority waterfall for "我方公司背景" injected into the main LLM.
-        // Reordered (P3): companyText — when SN passed the pre-curated
-        // markdown profile_report per contract §10.7 — is the richest and
-        // most accurate self-description we have. It must win over
-        // `userSite.excerpt` (which is only 3000 chars of stripped HTML
-        // and, when P5 kicks in, isn't even fetched).
-        const userSite = intel?.userSite
-        const userContext = intel?.userContext
-        let userSiteBlock
-        if (companyText) {
-          userSiteBlock =
-            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
-            (url ? `网址:${url}\n` : '') +
-            `资料:${companyText}\n\n`
-        } else if (companyObj.intro) {
-          userSiteBlock =
-            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
-            `公司名:${companyObj.name || '未提供'}\n` +
-            `网址:${url || '未提供'}\n` +
-            `简介:${companyObj.intro}\n` +
-            (companyObj.industry ? `行业:${companyObj.industry}\n` : '') +
-            (companyObj.product_lines?.length ? `产品线:${companyObj.product_lines.join('、')}\n` : '') +
-            `\n`
-        } else if (userSite?.status === 'ok') {
-          userSiteBlock =
-            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
-            `网址:${url || '未提供'}\n` +
-            (userSite.title ? `网站标题:${userSite.title}\n` : '') +
-            `网站摘录:${(userSite.excerpt || '').slice(0, 1500).replace(/\n/g, ' ')}\n`
-          if (userContext && userContext.results?.length > 0) {
-            userSiteBlock +=
-              `\n我方公司网络足迹(Google 搜索 ${userContext.query}):\n` +
-              userContext.results
-                .map((r, i) => `  ${i + 1}. ${r.title} — ${r.link}\n     ${r.snippet || ''}`)
-                .join('\n') +
-              `\n`
-          }
-          userSiteBlock += `\n`
-        } else {
-          userSiteBlock = `**我方公司网址:** ${url || '未提供'}\n\n`
-        }
+        // See lib/analyze/prompt.js for the exact contract — companyText
+        // (P3) must win over userSite.excerpt.
+        const userSiteBlock = buildUserSiteBlock({
+          companyText,
+          companyObj,
+          url,
+          userSite: intel?.userSite,
+          userContext: intel?.userContext,
+        })
 
         const textPart =
           (briefing ? `${briefing}\n\n---\n\n` : '') +
@@ -328,34 +267,20 @@ export async function POST(req) {
           ],
         })
 
-        // P7: bound the main LLM call to 180s. The surrounding Vercel
-        // Function has a 300s hard ceiling, but without an explicit
-        // AbortSignal the fetch could absorb the entire budget while
-        // `stage` stays wedged at `llm_analysis` and the client-side
-        // heartbeat keeps ticking — making hung upstreams look like
-        // slow progress. 180s leaves 2 min headroom for the rest of
-        // the pipeline and surfaces as a clean fail('llm','timeout').
-        const LLM_TIMEOUT_MS = 180_000
+        // P7: bound to 180s via callMainLLM (lib/analyze/llmCall.js).
         let llmRes
         try {
-          llmRes = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: modelName,
-              stream: false,
-              messages: [
-                ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-                { role: 'user', content: userContent },
-              ],
-            }),
-            signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+          llmRes = await callMainLLM({
+            endpoint,
+            apiKey,
+            model: modelName,
+            messages: [
+              ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+              { role: 'user', content: userContent },
+            ],
           })
         } catch (e) {
-          const timedOut = e?.name === 'TimeoutError' || /timeout|aborted/i.test(e?.message || '')
+          const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError' || /timeout|aborted/i.test(e?.message || '')
           return fail('llm', timedOut
             ? `LLM request timed out after ${LLM_TIMEOUT_MS / 1000}s`
             : `LLM connection failed: ${e.message}`)
