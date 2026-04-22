@@ -202,6 +202,7 @@ export async function POST(req) {
             intel = await gatherIntel({
               url,
               ownDomains,
+              userProfileText: companyText,
               inquiry: inquiry_text,
               images: preparedImages,
               apiKey,
@@ -224,10 +225,30 @@ export async function POST(req) {
 
         const briefing = useBriefing ? formatIntelAsBriefing(intel) : ''
 
+        // Priority waterfall for "我方公司背景" injected into the main LLM.
+        // Reordered (P3): companyText — when SN passed the pre-curated
+        // markdown profile_report per contract §10.7 — is the richest and
+        // most accurate self-description we have. It must win over
+        // `userSite.excerpt` (which is only 3000 chars of stripped HTML
+        // and, when P5 kicks in, isn't even fetched).
         const userSite = intel?.userSite
         const userContext = intel?.userContext
         let userSiteBlock
-        if (userSite?.status === 'ok') {
+        if (companyText) {
+          userSiteBlock =
+            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
+            (url ? `网址:${url}\n` : '') +
+            `资料:${companyText}\n\n`
+        } else if (companyObj.intro) {
+          userSiteBlock =
+            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
+            `公司名:${companyObj.name || '未提供'}\n` +
+            `网址:${url || '未提供'}\n` +
+            `简介:${companyObj.intro}\n` +
+            (companyObj.industry ? `行业:${companyObj.industry}\n` : '') +
+            (companyObj.product_lines?.length ? `产品线:${companyObj.product_lines.join('、')}\n` : '') +
+            `\n`
+        } else if (userSite?.status === 'ok') {
           userSiteBlock =
             `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
             `网址:${url || '未提供'}\n` +
@@ -242,20 +263,6 @@ export async function POST(req) {
               `\n`
           }
           userSiteBlock += `\n`
-        } else if (companyObj.intro) {
-          userSiteBlock =
-            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
-            `公司名:${companyObj.name || '未提供'}\n` +
-            `网址:${url || '未提供'}\n` +
-            `简介:${companyObj.intro}\n` +
-            (companyObj.industry ? `行业:${companyObj.industry}\n` : '') +
-            (companyObj.product_lines?.length ? `产品线:${companyObj.product_lines.join('、')}\n` : '') +
-            `\n`
-        } else if (companyText) {
-          userSiteBlock =
-            `【我方公司背景(收件方,仅供语境参考,不是调查目标)】\n` +
-            (url ? `网址:${url}\n` : '') +
-            `资料:${companyText}\n\n`
         } else {
           userSiteBlock = `**我方公司网址:** ${url || '未提供'}\n\n`
         }
