@@ -20,6 +20,14 @@ export default async function AdminLayout({ children }) {
           </svg>
           <span className="font-normal text-body">SnapCheck Debug</span>
         </Link>
+        <nav className="flex items-center gap-1 ml-4">
+          <Link href="/admin/traces" className="px-3 py-1.5 rounded-stripe-sm text-caption text-stripe-body hover:bg-stripe-purpleLight/15 hover:text-stripe-purple">
+            Trace 列表
+          </Link>
+          <Link href="/admin/diagnosis" className="px-3 py-1.5 rounded-stripe-sm text-caption text-stripe-body hover:bg-stripe-purpleLight/15 hover:text-stripe-purple">
+            诊断报告
+          </Link>
+        </nav>
         <div className="flex-1" />
         <Link
           href="/"
