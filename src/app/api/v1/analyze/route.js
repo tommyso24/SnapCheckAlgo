@@ -328,6 +328,14 @@ export async function POST(req) {
           ],
         })
 
+        // P7: bound the main LLM call to 180s. The surrounding Vercel
+        // Function has a 300s hard ceiling, but without an explicit
+        // AbortSignal the fetch could absorb the entire budget while
+        // `stage` stays wedged at `llm_analysis` and the client-side
+        // heartbeat keeps ticking — making hung upstreams look like
+        // slow progress. 180s leaves 2 min headroom for the rest of
+        // the pipeline and surfaces as a clean fail('llm','timeout').
+        const LLM_TIMEOUT_MS = 180_000
         let llmRes
         try {
           llmRes = await fetch(endpoint, {
@@ -344,9 +352,13 @@ export async function POST(req) {
                 { role: 'user', content: userContent },
               ],
             }),
+            signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
           })
         } catch (e) {
-          return fail('llm', `LLM connection failed: ${e.message}`)
+          const timedOut = e?.name === 'TimeoutError' || /timeout|aborted/i.test(e?.message || '')
+          return fail('llm', timedOut
+            ? `LLM request timed out after ${LLM_TIMEOUT_MS / 1000}s`
+            : `LLM connection failed: ${e.message}`)
         }
 
         if (!llmRes.ok) {
