@@ -3,6 +3,7 @@ import {
   parseExtractionJson,
   deriveCompanyUrlFromEmail,
   deriveCompanyUrlFromText,
+  isConfidentRegexFallback,
 } from '@/lib/intel/extract'
 
 describe('parseExtractionJson', () => {
@@ -248,5 +249,87 @@ describe('deriveCompanyUrlFromText', () => {
       ['starseedpkg.com']
     )
     expect(out).toBeNull()
+  })
+})
+
+// ── P4: regex fallback confidence gating ─────────────────────────────
+//
+// When the extraction LLM returns companyUrl:null (correctly: "sender
+// didn't give a URL"), the regex fallback used to commit the first URL
+// it scanned — any URL. That's too trusting: a random third-party link
+// in the inquiry body would get promoted to "sender's company URL".
+// This gate requires corroborating evidence.
+describe('isConfidentRegexFallback', () => {
+  it('accepts when URL registered-domain matches a corporate email domain', () => {
+    const out = isConfidentRegexFallback({
+      url: 'https://acmecorp.com',
+      email: 'sales@acmecorp.com',
+      text: 'Hi, please visit acmecorp.com',
+    })
+    expect(out.accept).toBe(true)
+    expect(out.reason).toMatch(/email/i)
+  })
+
+  it('accepts when URL matches email registered-domain despite www/subdomain drift', () => {
+    const out = isConfidentRegexFallback({
+      url: 'https://shop.acmecorp.com',
+      email: 'sales@mail.acmecorp.com',
+      text: 'visit shop.acmecorp.com',
+    })
+    expect(out.accept).toBe(true)
+  })
+
+  it('rejects when email is from a free provider and URL has no sig context', () => {
+    // gmail alone gives no corroboration; URL in body prose without sig
+    // markers means the regex likely grabbed a random link.
+    const out = isConfidentRegexFallback({
+      url: 'https://somerandom.com',
+      email: 'buyer123@gmail.com',
+      text: 'I was browsing somerandom.com the other day and liked your products. Send me a quote.',
+    })
+    expect(out.accept).toBe(false)
+  })
+
+  it('accepts when URL appears in last 400 chars alongside signature markers (phone/email)', () => {
+    const text = `Hi there,
+
+Interested in bulk LED panels for our retail project.
+
+Best regards,
+Parul Verma
+Acme Trading Co.
+Email: parul@acmetrading.in
+Tel: +91-98765-43210
+Web: https://acmetrading.in`
+    const out = isConfidentRegexFallback({
+      url: 'https://acmetrading.in',
+      email: 'parul@acmetrading.in',
+      text,
+    })
+    expect(out.accept).toBe(true)
+  })
+
+  it('rejects when URL is in body prose with no email/phone proximity', () => {
+    const text = 'I was visiting https://thirdparty.biz last week and wanted to reach out.'
+    const out = isConfidentRegexFallback({
+      url: 'https://thirdparty.biz',
+      email: null,
+      text,
+    })
+    expect(out.accept).toBe(false)
+  })
+
+  it('rejects when url is missing or has no registerable domain', () => {
+    expect(isConfidentRegexFallback({ url: null, email: 'x@y.com', text: '' }).accept).toBe(false)
+    expect(isConfidentRegexFallback({ url: '', email: 'x@y.com', text: '' }).accept).toBe(false)
+  })
+
+  it('rejects when URL top-level domain does not match email top-level domain', () => {
+    const out = isConfidentRegexFallback({
+      url: 'https://impersonator.com',
+      email: 'ceo@acmecorp.com',
+      text: 'Please visit impersonator.com for the proposal.',
+    })
+    expect(out.accept).toBe(false)
   })
 })
