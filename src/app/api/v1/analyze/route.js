@@ -267,7 +267,7 @@ export async function POST(req) {
           ],
         })
 
-        // P7: bound to 180s via callMainLLM (lib/analyze/llmCall.js).
+        // P7: bound to 270s via callMainLLM (lib/analyze/llmCall.js).
         let llmRes
         try {
           llmRes = await callMainLLM({

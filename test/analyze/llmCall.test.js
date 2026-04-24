@@ -4,8 +4,8 @@ import { callMainLLM, LLM_TIMEOUT_MS } from '@/lib/analyze/llmCall'
 describe('callMainLLM', () => {
   afterEach(() => { vi.unstubAllGlobals() })
 
-  it('exports a 180s default timeout constant', () => {
-    expect(LLM_TIMEOUT_MS).toBe(180_000)
+  it('exports a 270s default timeout constant', () => {
+    expect(LLM_TIMEOUT_MS).toBe(270_000)
   })
 
   it('passes an AbortSignal to fetch', async () => {
