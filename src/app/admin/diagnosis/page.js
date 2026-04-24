@@ -637,7 +637,7 @@ const REPORT_HTML = `
           <code>route.js:298-312</code>：主 LLM fetch 没传 <code>signal</code>。抽取 LLM 那边设了（<code>hasImages ? 45000 : 20000</code>），主 LLM 反而没设，不一致。上游 hang 时要等 Vercel 300s maxDuration，客户端心跳照发但 <code>stage</code> 永远卡在 <code>llm_analysis</code>，定位困难。
         </dd>
         <dt>修复</dt><dd>
-          <code>AbortSignal.timeout(180_000)</code>（3 分钟，对慢模型留足余量；仍在 300s maxDuration 内留 2 分钟给其它阶段）。超时走现有 <code>fail('llm', 'timeout')</code> 分支。
+          <code>AbortSignal.timeout(270_000)</code>（4.5 分钟，对慢模型留足余量；仍在 300s maxDuration 内留 30s 给其它阶段）。超时走现有 <code>fail('llm', 'timeout')</code> 分支。
         </dd>
       </dl>
     </div>
@@ -765,7 +765,7 @@ const REPORT_HTML = `
     <span class="phase-covers">覆盖 <a href="#p7">P7</a> · <a href="#p8">P8</a> · <a href="#p9">P9</a> · <a href="#p10">P10</a> · <a href="#p11">P11</a></span>
   </div>
   <ol>
-    <li>主 LLM fetch 加 <code>AbortSignal.timeout(180_000)</code>。</li>
+    <li>主 LLM fetch 加 <code>AbortSignal.timeout(270_000)</code>。</li>
     <li>引入 module 级 <code>AbortController</code>，<code>cancel()</code> 里 abort + close + recordObs('cancelled')；下游 fetch 传 signal。</li>
     <li><code>saveQuery.userEmail</code> 改 <code>api:sn:\${requestId}</code>。</li>
     <li><code>pickScore</code> 两段匹配。</li>
